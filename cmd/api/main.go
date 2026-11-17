@@ -10,12 +10,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
 
 	"eneba-backend/internal/config"
 	"eneba-backend/internal/database"
+	"eneba-backend/internal/handlers"
+	"eneba-backend/internal/repository"
+	"eneba-backend/internal/server"
+	"eneba-backend/internal/services"
 )
 
 func main() {
@@ -54,25 +56,20 @@ func run() error {
 	}
 	defer pool.Close()
 	slog.Info("database connected")
-	// TODO: build repositories, services and handlers, then router := server.NewRouter(...)
+	// Wire dependencies by hand: repositories and shared services -> handlers.
+	userRepo := repository.NewUserRepository(pool)
+	refreshTokenRepo := repository.NewRefreshTokenRepository(pool)
 
-	r := chi.NewRouter()
-	r.Use(middleware.RequestID, middleware.Recoverer)
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		pingCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-		defer cancel()
-		if err := pool.Ping(pingCtx); err != nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			_, _ = w.Write([]byte(`{"status":"degraded","database":"down"}`))
-			return
-		}
-		_, _ = w.Write([]byte(`{"status":"ok","database":"up"}`))
+	tokenService := services.NewTokenService(cfg)
+
+	router := server.NewRouter(server.Deps{
+		Config: cfg,
+		Health: handlers.NewHealthHandler(pool),
+		Auth:   handlers.NewAuthHandler(pool, userRepo, refreshTokenRepo, tokenService, cfg.IsProduction()),
 	})
-
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           r,
+		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      15 * time.Second,

@@ -7,33 +7,44 @@ import (
 	"time"
 )
 
+// minJWTSecretLength is the shortest secret we accept for HS256 (32 bytes = 256 bits).
+const minJWTSecretLength = 32
+
 // Config holds every setting the app reads from environment variables.
 // It is loaded once at startup and passed to whatever needs it.
 type Config struct {
-	Env         string        // "development" or "production"
-	Port        string        // HTTP port; Render sets PORT automatically
-	DatabaseURL string        // Postgres connection string (Supabase pooler URL)
-	JWTSecret   string        // key used to sign auth tokens
-	JWTTTL      time.Duration // how long a token stays valid
-	CORSOrigins []string      // frontend origins allowed to call the API
+	Env         string   // "development" or "production"
+	Port        string   // HTTP port; Render sets PORT automatically
+	DatabaseURL string   // Postgres connection string (Supabase pooler URL)
+	CORSOrigins []string // frontend origins allowed to call the API
+
+	JWTSecret       string        // key used to sign access tokens
+	JWTIssuer       string        // "iss" claim: who created the token
+	JWTAudience     string        // "aud" claim: who the token is meant for
+	AccessTokenTTL  time.Duration // lifetime of an access token (short)
+	RefreshTokenTTL time.Duration // lifetime of a refresh token (long)
 }
 
 // Load reads the environment, applies defaults and fails fast
-// if a required value is missing, so a misconfigured deploy never starts.
+// if a value is missing or invalid, so a misconfigured deploy never starts.
 func Load() (*Config, error) {
 	cfg := &Config{
 		Env:         getEnv("APP_ENV", "development"),
 		Port:        getEnv("PORT", "8080"),
 		DatabaseURL: os.Getenv("DATABASE_URL"),
-		JWTSecret:   os.Getenv("JWT_SECRET"),
 		CORSOrigins: splitCSV(getEnv("CORS_ORIGINS", "http://localhost:5173")),
+		JWTSecret:   os.Getenv("JWT_SECRET"),
+		JWTIssuer:   getEnv("JWT_ISSUER", "eneba-backend"),
+		JWTAudience: getEnv("JWT_AUDIENCE", "eneba-frontend"),
 	}
 
-	ttl, err := time.ParseDuration(getEnv("JWT_TTL", "24h"))
-	if err != nil {
-		return nil, fmt.Errorf("invalid JWT_TTL: %w", err)
+	var err error
+	if cfg.AccessTokenTTL, err = getDuration("JWT_ACCESS_TTL", 15*time.Minute); err != nil {
+		return nil, err
 	}
-	cfg.JWTTTL = ttl
+	if cfg.RefreshTokenTTL, err = getDuration("JWT_REFRESH_TTL", 7*24*time.Hour); err != nil {
+		return nil, err
+	}
 
 	var missing []string
 	if cfg.DatabaseURL == "" {
@@ -44,6 +55,10 @@ func Load() (*Config, error) {
 	}
 	if len(missing) > 0 {
 		return nil, fmt.Errorf("missing required env vars: %s", strings.Join(missing, ", "))
+	}
+
+	if len(cfg.JWTSecret) < minJWTSecretLength {
+		return nil, fmt.Errorf("JWT_SECRET must be at least %d characters", minJWTSecretLength)
 	}
 
 	return cfg, nil
@@ -59,6 +74,20 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// getDuration parses values like "15m", "24h" or "168h".
+func getDuration(key string, fallback time.Duration) (time.Duration, error) {
+	v := getEnv(key, "")
+	if v == "" {
+		return fallback, nil
+	}
+
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s: %w", key, err)
+	}
+	return d, nil
 }
 
 func splitCSV(s string) []string {
