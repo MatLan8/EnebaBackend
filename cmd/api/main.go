@@ -59,15 +59,17 @@ func run() error {
 	// Wire dependencies by hand: repositories and shared services -> handlers.
 	userRepo := repository.NewUserRepository(pool)
 	refreshTokenRepo := repository.NewRefreshTokenRepository(pool)
+	productRepo := repository.NewProductRepository(pool)
 
 	tokenService := services.NewTokenService(cfg)
 
 	router := server.NewRouter(server.Deps{
-		Config: cfg,
-		Health: handlers.NewHealthHandler(pool),
-		Auth:   handlers.NewAuthHandler(pool, userRepo, refreshTokenRepo, tokenService, cfg.IsProduction()),
-		Users:  handlers.NewUserHandler(userRepo),
-		Tokens: tokenService,
+		Config:   cfg,
+		Health:   handlers.NewHealthHandler(pool),
+		Auth:     handlers.NewAuthHandler(pool, userRepo, refreshTokenRepo, tokenService, cfg.IsProduction()),
+		Users:    handlers.NewUserHandler(userRepo),
+		Products: handlers.NewProductHandler(productRepo),
+		Tokens:   tokenService,
 	})
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,

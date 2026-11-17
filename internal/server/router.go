@@ -17,11 +17,12 @@ import (
 // Deps holds everything the router needs. main.go builds it;
 // new handlers are added here as the API grows.
 type Deps struct {
-	Config *config.Config
-	Health *handlers.HealthHandler
-	Auth   *handlers.AuthHandler
-	Users  *handlers.UserHandler
-	Tokens *services.TokenService // used by the auth middleware
+	Config   *config.Config
+	Health   *handlers.HealthHandler
+	Auth     *handlers.AuthHandler
+	Users    *handlers.UserHandler
+	Products *handlers.ProductHandler
+	Tokens   *services.TokenService // used by the auth middleware
 }
 
 // NewRouter registers middleware and all routes.
@@ -53,6 +54,12 @@ func NewRouter(d Deps) http.Handler {
 			r.Post("/login", d.Auth.Login)
 			r.Post("/refresh", d.Auth.Refresh)
 			r.Post("/logout", d.Auth.Logout)
+		})
+
+		// Public store routes. chi matches fixed segments like /filters before
+		// URL parameters, so a later /products/{slug} route won't swallow them.
+		r.Route("/products", func(r chi.Router) {
+			r.Get("/filters", d.Products.Filters)
 		})
 
 		// Every route in this group requires a valid access token.

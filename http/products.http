@@ -1,0 +1,3 @@
+### Filters
+# Public, no sign-in needed. Counts only include products with an active offer.
+GET {{baseUrl}}/api/v1/products/filters
