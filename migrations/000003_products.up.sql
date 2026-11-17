@@ -7,9 +7,9 @@ CREATE TABLE products (
     slug         TEXT NOT NULL UNIQUE, -- used in URLs, e.g. /product/elden-ring-steam-global
     description  TEXT NOT NULL DEFAULT '',
     image_url    TEXT NOT NULL,        -- cover shown on cards and the product page
-    type         TEXT NOT NULL CHECK (type IN ('game', 'dlc', 'gift_card', 'subscription')),
-    platform     TEXT NOT NULL CHECK (platform IN ('steam', 'xbox', 'playstation', 'nintendo', 'ea', 'ubisoft', 'epic', 'gog', 'battlenet', 'other')),
-    region       TEXT NOT NULL CHECK (region IN ('global', 'eu', 'na', 'uk', 'latam', 'asia')),
+    type         TEXT NOT NULL CHECK (type IN ('game', 'dlc', 'gift_card', 'subscription', 'software', 'top_up')),
+    platform     TEXT NOT NULL CHECK (platform IN ('steam', 'xbox_live', 'psn', 'nintendo_eshop', 'ea_app', 'ubisoft', 'epic_games', 'battlenet', 'official_website')),
+    region       TEXT NOT NULL CHECK (region IN ('global', 'europe', 'north_america', 'uk', 'latam', 'asia')),
     developer    TEXT,
     publisher    TEXT,
     release_date DATE,

@@ -13,6 +13,8 @@ const (
 	ProductTypeDLC          ProductType = "dlc"
 	ProductTypeGiftCard     ProductType = "gift_card"
 	ProductTypeSubscription ProductType = "subscription"
+	ProductTypeSoftware     ProductType = "software"
+	ProductTypeTopUp        ProductType = "top_up" // in-game currency, e.g. FC Points
 )
 
 // ProductTypes lists every valid ProductType, e.g. for filters in the store.
@@ -21,55 +23,55 @@ var ProductTypes = []ProductType{
 	ProductTypeDLC,
 	ProductTypeGiftCard,
 	ProductTypeSubscription,
+	ProductTypeSoftware,
+	ProductTypeTopUp,
 }
 
 // Platform is where the key is activated.
 type Platform string
 
 const (
-	PlatformSteam       Platform = "steam"
-	PlatformXbox        Platform = "xbox"
-	PlatformPlayStation Platform = "playstation"
-	PlatformNintendo    Platform = "nintendo"
-	PlatformEA          Platform = "ea"
-	PlatformUbisoft     Platform = "ubisoft"
-	PlatformEpic        Platform = "epic"
-	PlatformGOG         Platform = "gog"
-	PlatformBattleNet   Platform = "battlenet"
-	PlatformOther       Platform = "other"
+	PlatformSteam           Platform = "steam"
+	PlatformXboxLive        Platform = "xbox_live"
+	PlatformPSN             Platform = "psn"
+	PlatformNintendoEShop   Platform = "nintendo_eshop"
+	PlatformEAApp           Platform = "ea_app"
+	PlatformUbisoft         Platform = "ubisoft"
+	PlatformEpicGames       Platform = "epic_games"
+	PlatformBattleNet       Platform = "battlenet"
+	PlatformOfficialWebsite Platform = "official_website" // redeemed on the publisher's own site, e.g. Minecraft or Windows
 )
 
 // Platforms lists every valid Platform.
 var Platforms = []Platform{
 	PlatformSteam,
-	PlatformXbox,
-	PlatformPlayStation,
-	PlatformNintendo,
-	PlatformEA,
+	PlatformXboxLive,
+	PlatformPSN,
+	PlatformNintendoEShop,
+	PlatformEAApp,
 	PlatformUbisoft,
-	PlatformEpic,
-	PlatformGOG,
+	PlatformEpicGames,
 	PlatformBattleNet,
-	PlatformOther,
+	PlatformOfficialWebsite,
 }
 
 // Region is where the key can be activated.
 type Region string
 
 const (
-	RegionGlobal Region = "global"
-	RegionEU     Region = "eu"
-	RegionNA     Region = "na"
-	RegionUK     Region = "uk"
-	RegionLatAm  Region = "latam"
-	RegionAsia   Region = "asia"
+	RegionGlobal       Region = "global"
+	RegionEurope       Region = "europe"
+	RegionNorthAmerica Region = "north_america"
+	RegionUK           Region = "uk"
+	RegionLatAm        Region = "latam"
+	RegionAsia         Region = "asia"
 )
 
 // Regions lists every valid Region.
 var Regions = []Region{
 	RegionGlobal,
-	RegionEU,
-	RegionNA,
+	RegionEurope,
+	RegionNorthAmerica,
 	RegionUK,
 	RegionLatAm,
 	RegionAsia,
