@@ -1,0 +1,7 @@
+### Health check: API and database status
+GET {{baseUrl}}/health
+
+> {%
+    client.test("status 200", () => client.assert(response.status === 200, "got " + response.status));
+    client.test("database up", () => client.assert(response.body.database === "up"));
+%}

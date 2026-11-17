@@ -3,3 +3,6 @@
 /tmp/
 
 .idea
+
+# HTTP client private environment (secrets)
+http/http-client.private.env.json
