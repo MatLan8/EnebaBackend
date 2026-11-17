@@ -5,6 +5,7 @@ import (
 
 	"eneba-backend/internal/httpx"
 	"eneba-backend/internal/repository"
+	"eneba-backend/internal/requests"
 	"eneba-backend/internal/responses"
 )
 
@@ -25,5 +26,24 @@ func (h *ProductHandler) Filters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.WriteJSON(w, http.StatusOK, responses.NewProductFiltersResponse(filters))
+	httpx.WriteJSON(w, http.StatusOK, filters)
+}
+
+// List handles GET /api/v1/products and returns one page of the store's
+// products. Query parameters filter, search, sort and page the list; see
+// requests.ParseProductListQuery. It is public, no sign-in needed.
+func (h *ProductHandler) List(w http.ResponseWriter, r *http.Request) {
+	params, err := requests.ParseProductListQuery(r.URL.Query())
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	items, total, err := h.products.List(r.Context(), params)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	httpx.WriteJSON(w, http.StatusOK, responses.NewProductListResponse(items, total, params))
 }

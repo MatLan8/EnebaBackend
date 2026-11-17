@@ -59,6 +59,7 @@ func NewRouter(d Deps) http.Handler {
 		// Public store routes. chi matches fixed segments like /filters before
 		// URL parameters, so a later /products/{slug} route won't swallow them.
 		r.Route("/products", func(r chi.Router) {
+			r.Get("/", d.Products.List)
 			r.Get("/filters", d.Products.Filters)
 		})
 
