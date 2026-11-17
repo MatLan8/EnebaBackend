@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"strings"
@@ -23,6 +24,8 @@ type Config struct {
 	JWTAudience     string        // "aud" claim: who the token is meant for
 	AccessTokenTTL  time.Duration // lifetime of an access token (short)
 	RefreshTokenTTL time.Duration // lifetime of a refresh token (long)
+
+	KeyEncryptionSecret []byte // 32 bytes used to encrypt digital keys (AES-256)
 }
 
 // Load reads the environment, applies defaults and fails fast
@@ -53,12 +56,21 @@ func Load() (*Config, error) {
 	if cfg.JWTSecret == "" {
 		missing = append(missing, "JWT_SECRET")
 	}
+	if os.Getenv("KEY_ENCRYPTION_SECRET") == "" {
+		missing = append(missing, "KEY_ENCRYPTION_SECRET")
+	}
 	if len(missing) > 0 {
 		return nil, fmt.Errorf("missing required env vars: %s", strings.Join(missing, ", "))
 	}
 
 	if len(cfg.JWTSecret) < minJWTSecretLength {
 		return nil, fmt.Errorf("JWT_SECRET must be at least %d characters", minJWTSecretLength)
+	}
+
+	// The secret is stored as base64 because it is 32 random bytes, not text.
+	cfg.KeyEncryptionSecret, err = base64.StdEncoding.DecodeString(os.Getenv("KEY_ENCRYPTION_SECRET"))
+	if err != nil || len(cfg.KeyEncryptionSecret) != 32 {
+		return nil, fmt.Errorf("KEY_ENCRYPTION_SECRET must be 32 bytes encoded as base64")
 	}
 
 	return cfg, nil
