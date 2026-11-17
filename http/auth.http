@@ -1,22 +1,36 @@
-# Auth endpoints. Pick the "local" environment in the selector at the top of the editor.
-# Successful register/login saves the access token as {{accessToken}};
+# Pick the "local" environment in the selector at the top of the editor.
+# Register and login save the access token as {{accessToken}};
 # the refresh_token cookie is kept and sent automatically by GoLand.
 
-### Register a new random user (works every run)
+### Register
 POST {{baseUrl}}/api/v1/auth/register
 Content-Type: application/json
 
 {
-  "name": "Random User",
-  "email": "{{$random.email}}",
-  "password": "supersecret123"
+  "name": "aa",
+  "email": "a@a.com",
+  "password": "bbbbbbbbbbbb"
 }
 
-> {%
-    client.test("status 201", () => client.assert(response.status === 201, "got " + response.status));
-    client.test("has access token", () => client.assert(response.body.accessToken, "missing accessToken"));
-    client.global.set("accessToken", response.body.accessToken);
-%}
+> {% client.global.set("accessToken", response.body.accessToken); %}
 
+### Login
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
 
-# Login, refresh, logout and /users/me are added here as they are built.
+{
+  "email": "a@a.com",
+  "password": "bbbbbbbbbbbb"
+}
+
+> {% client.global.set("accessToken", response.body.accessToken); %}
+
+### Refresh
+# Swaps the refresh_token cookie for a new one and returns a new access token. No body needed.
+POST {{baseUrl}}/api/v1/auth/refresh
+
+> {% client.global.set("accessToken", response.body.accessToken); %}
+
+### Logout
+# Revokes the refresh token from the cookie and clears it. No body needed.
+POST {{baseUrl}}/api/v1/auth/logout

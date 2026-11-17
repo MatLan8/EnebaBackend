@@ -66,6 +66,8 @@ func run() error {
 		Config: cfg,
 		Health: handlers.NewHealthHandler(pool),
 		Auth:   handlers.NewAuthHandler(pool, userRepo, refreshTokenRepo, tokenService, cfg.IsProduction()),
+		Users:  handlers.NewUserHandler(userRepo),
+		Tokens: tokenService,
 	})
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,

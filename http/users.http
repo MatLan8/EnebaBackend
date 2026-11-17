@@ -1,0 +1,6 @@
+# Run Login (or Register) in auth.http first, it saves {{accessToken}}.
+# When the token expires after 15 minutes, run Refresh in auth.http.
+
+### Me
+GET {{baseUrl}}/api/v1/users/me
+Authorization: Bearer {{accessToken}}

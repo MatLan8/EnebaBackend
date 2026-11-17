@@ -11,6 +11,7 @@ import (
 	"eneba-backend/internal/httpx"
 	"eneba-backend/internal/middleware"
 	"eneba-backend/internal/models"
+	"eneba-backend/internal/services"
 )
 
 // Deps holds everything the router needs. main.go builds it;
@@ -19,6 +20,8 @@ type Deps struct {
 	Config *config.Config
 	Health *handlers.HealthHandler
 	Auth   *handlers.AuthHandler
+	Users  *handlers.UserHandler
+	Tokens *services.TokenService // used by the auth middleware
 }
 
 // NewRouter registers middleware and all routes.
@@ -47,6 +50,16 @@ func NewRouter(d Deps) http.Handler {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Route("/auth", func(r chi.Router) {
 			r.Post("/register", d.Auth.Register)
+			r.Post("/login", d.Auth.Login)
+			r.Post("/refresh", d.Auth.Refresh)
+			r.Post("/logout", d.Auth.Logout)
+		})
+
+		// Every route in this group requires a valid access token.
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.Authenticate(d.Tokens))
+
+			r.Get("/users/me", d.Users.Me)
 		})
 	})
 
