@@ -3,7 +3,7 @@
 // Eneba data. Run it from the project root:
 //
 //	go run ./cmd/seed          # only works while the products table is empty
-//	go run ./cmd/seed -reset   # wipes the catalog tables first, then seeds again
+//	go run ./cmd/seed -reset   # wipes the catalog tables first, then migrates and seeds again
 package main
 
 import (
@@ -52,11 +52,6 @@ func run() error {
 		return err
 	}
 
-	// The catalog tables come from migration 000003, so make sure it is applied.
-	if err := database.Migrate(cfg.DatabaseURL, "migrations"); err != nil {
-		return err
-	}
-
 	ctx := context.Background()
 	pool, err := database.NewPool(ctx, cfg.DatabaseURL)
 	if err != nil {
@@ -64,14 +59,24 @@ func run() error {
 	}
 	defer pool.Close()
 
+	// -reset wipes the catalog before the migrations run, because a migration
+	// can depend on the new seed data: 000004 makes release_date NOT NULL and
+	// would fail on old rows that still have no date.
+	if *reset {
+		if err := truncateCatalog(ctx, pool); err != nil {
+			return err
+		}
+	}
+
+	// The catalog tables come from migration 000003, so make sure it is applied.
+	if err := database.Migrate(cfg.DatabaseURL, "migrations"); err != nil {
+		return err
+	}
+
 	// One transaction: either the whole catalog is inserted or nothing is.
 	var summary seedSummary
 	err = database.WithTx(ctx, pool, func(tx pgx.Tx) error {
-		if *reset {
-			if err := truncateCatalog(ctx, tx); err != nil {
-				return err
-			}
-		} else if err := ensureCatalogEmpty(ctx, tx); err != nil {
+		if err := ensureCatalogEmpty(ctx, tx); err != nil {
 			return err
 		}
 

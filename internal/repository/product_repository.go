@@ -157,8 +157,8 @@ var productSortOrders = map[requests.ProductSort]string{
 	requests.ProductSortPopular:   "p.sold_count DESC",
 	requests.ProductSortPriceAsc:  "co.price_cents ASC",
 	requests.ProductSortPriceDesc: "co.price_cents DESC",
-	requests.ProductSortNewest:    "p.release_date DESC NULLS LAST", // products without a date go last
-	requests.ProductSortOldest:    "p.release_date ASC NULLS LAST",  // products without a date go last
+	requests.ProductSortNewest:    "p.release_date DESC",
+	requests.ProductSortOldest:    "p.release_date ASC",
 	requests.ProductSortNameAsc:   "p.title ASC",
 	requests.ProductSortNameDesc:  "p.title DESC",
 }

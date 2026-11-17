@@ -1032,7 +1032,7 @@
       "region": "europe",
       "developer": null,
       "publisher": "Valve",
-      "releaseDate": null,
+      "releaseDate": "2010-09-30",
       "genreIds": []
     },
     {
@@ -1046,7 +1046,7 @@
       "region": "europe",
       "developer": null,
       "publisher": "Sony Interactive Entertainment",
-      "releaseDate": null,
+      "releaseDate": "2013-11-29",
       "genreIds": []
     },
     {
@@ -1060,7 +1060,7 @@
       "region": "global",
       "developer": null,
       "publisher": "Roblox Corporation",
-      "releaseDate": null,
+      "releaseDate": "2010-09-26",
       "genreIds": []
     },
     {
@@ -1090,7 +1090,7 @@
       "region": "global",
       "developer": "Activision",
       "publisher": "Activision",
-      "releaseDate": null,
+      "releaseDate": "2019-10-25",
       "genreIds": [
         4
       ]
@@ -1106,7 +1106,7 @@
       "region": "global",
       "developer": null,
       "publisher": "Microsoft",
-      "releaseDate": null,
+      "releaseDate": "2019-04-09",
       "genreIds": []
     },
     {
@@ -1120,7 +1120,7 @@
       "region": "global",
       "developer": null,
       "publisher": "Microsoft",
-      "releaseDate": null,
+      "releaseDate": "2019-06-09",
       "genreIds": []
     },
     {
@@ -1134,7 +1134,7 @@
       "region": "europe",
       "developer": null,
       "publisher": "Sony Interactive Entertainment",
-      "releaseDate": null,
+      "releaseDate": "2022-06-22",
       "genreIds": []
     },
     {
@@ -1148,7 +1148,7 @@
       "region": "europe",
       "developer": null,
       "publisher": "Nintendo",
-      "releaseDate": null,
+      "releaseDate": "2018-09-18",
       "genreIds": []
     },
     {
@@ -1176,7 +1176,7 @@
       "region": "europe",
       "developer": "Microsoft",
       "publisher": "Microsoft",
-      "releaseDate": null,
+      "releaseDate": "2020-04-21",
       "genreIds": []
     },
     {
@@ -1190,7 +1190,7 @@
       "region": "global",
       "developer": "ESET",
       "publisher": "ESET",
-      "releaseDate": null,
+      "releaseDate": "2007-11-05",
       "genreIds": []
     }
   ],

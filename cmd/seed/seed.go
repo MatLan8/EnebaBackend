@@ -10,6 +10,7 @@ import (
 	sq "github.com/Masterminds/squirrel"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"eneba-backend/internal/services"
 )
@@ -47,8 +48,19 @@ func ensureCatalogEmpty(ctx context.Context, tx pgx.Tx) error {
 
 // truncateCatalog empties every catalog table. Naming them all in one TRUNCATE
 // is allowed even though they reference each other with foreign keys.
-func truncateCatalog(ctx context.Context, tx pgx.Tx) error {
-	_, err := tx.Exec(ctx, "TRUNCATE digital_keys, offers, sellers, product_genres, genres, products")
+// It runs before the migrations, so on a fresh database the tables don't exist
+// yet and there is nothing to empty. All catalog tables come from migration
+// 000003, so checking for products is enough.
+func truncateCatalog(ctx context.Context, pool *pgxpool.Pool) error {
+	var exists bool
+	if err := pool.QueryRow(ctx, "SELECT to_regclass('products') IS NOT NULL").Scan(&exists); err != nil {
+		return fmt.Errorf("check catalog tables: %w", err)
+	}
+	if !exists {
+		return nil
+	}
+
+	_, err := pool.Exec(ctx, "TRUNCATE digital_keys, offers, sellers, product_genres, genres, products")
 	if err != nil {
 		return fmt.Errorf("truncate catalog: %w", err)
 	}
@@ -244,15 +256,15 @@ func insertRows(ctx context.Context, tx pgx.Tx, table string, columns []string, 
 	return nil
 }
 
-// parseDate turns "2006-01-02" into a time for the DATE column; nil stays NULL.
-func parseDate(value *string) (*time.Time, error) {
-	if value == nil {
-		return nil, nil
+// parseDate turns "2006-01-02" into a time for the NOT NULL release_date column.
+func parseDate(value string) (time.Time, error) {
+	if value == "" {
+		return time.Time{}, errors.New("missing release date")
 	}
 
-	t, err := time.Parse(time.DateOnly, *value)
+	t, err := time.Parse(time.DateOnly, value)
 	if err != nil {
-		return nil, fmt.Errorf("invalid release date %q: %w", *value, err)
+		return time.Time{}, fmt.Errorf("invalid release date %q: %w", value, err)
 	}
-	return &t, nil
+	return t, nil
 }

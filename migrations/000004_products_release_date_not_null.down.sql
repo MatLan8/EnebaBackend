@@ -1,0 +1,1 @@
+ALTER TABLE products ALTER COLUMN release_date DROP NOT NULL;

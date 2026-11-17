@@ -19,7 +19,7 @@ type Product struct {
 	Region      Region      `json:"region"`
 	Developer   *string     `json:"developer"`
 	Publisher   *string     `json:"publisher"`
-	ReleaseDate *time.Time  `json:"releaseDate"`
+	ReleaseDate time.Time   `json:"releaseDate"`
 	SoldCount   int         `json:"soldCount"` // increased when an order is paid
 	CreatedAt   time.Time   `json:"createdAt"`
 	UpdatedAt   time.Time   `json:"updatedAt"`

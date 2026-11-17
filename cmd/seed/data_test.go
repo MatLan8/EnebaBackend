@@ -3,6 +3,7 @@ package main
 import (
 	"slices"
 	"testing"
+	"time"
 
 	"eneba-backend/internal/models"
 )
@@ -39,6 +40,7 @@ func TestSeedFile_MatchesSchema(t *testing.T) {
 		if !slices.Contains(models.Regions, models.Region(p.Region)) {
 			t.Errorf("product %q: unknown region %q", p.Slug, p.Region)
 		}
+		// release_date is NOT NULL, so every product needs a valid date.
 		if _, err := parseDate(p.ReleaseDate); err != nil {
 			t.Errorf("product %q: %v", p.Slug, err)
 		}
@@ -61,6 +63,22 @@ func TestSeedFile_MatchesSchema(t *testing.T) {
 		}
 		if o.KeyCount < 1 {
 			t.Errorf("offer %d: needs at least one key", i)
+		}
+	}
+}
+
+func TestParseDate(t *testing.T) {
+	got, err := parseDate("2013-11-29")
+	if err != nil {
+		t.Fatalf("parseDate: %v", err)
+	}
+	if want := time.Date(2013, 11, 29, 0, 0, 0, 0, time.UTC); !got.Equal(want) {
+		t.Errorf("parseDate = %v, want %v", got, want)
+	}
+
+	for _, value := range []string{"", "29/11/2013", "2013-13-01"} {
+		if _, err := parseDate(value); err == nil {
+			t.Errorf("parseDate(%q): expected an error", value)
 		}
 	}
 }

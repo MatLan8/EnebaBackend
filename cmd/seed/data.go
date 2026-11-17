@@ -42,7 +42,7 @@ type seedProduct struct {
 	Region      string  `json:"region"`
 	Developer   *string `json:"developer"`
 	Publisher   *string `json:"publisher"`
-	ReleaseDate *string `json:"releaseDate"` // "2006-01-02" or null
+	ReleaseDate string  `json:"releaseDate"` // "2006-01-02", required
 	GenreIDs    []int   `json:"genreIds"`
 }
 
@@ -66,6 +66,14 @@ func loadSeedFile(path string) (*seedFile, error) {
 	var data seedFile
 	if err := json.Unmarshal(raw, &data); err != nil {
 		return nil, fmt.Errorf("decode seed file: %w", err)
+	}
+
+	// Check the dates before anything touches the database, so a product
+	// without a release date fails the run before -reset wipes the catalog.
+	for _, p := range data.Products {
+		if _, err := parseDate(p.ReleaseDate); err != nil {
+			return nil, fmt.Errorf("product %q: %w", p.Slug, err)
+		}
 	}
 
 	return &data, nil
