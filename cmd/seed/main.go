@@ -61,7 +61,8 @@ func run() error {
 
 	// -reset wipes the catalog before the migrations run, because a migration
 	// can depend on the new seed data: 000004 makes release_date NOT NULL and
-	// would fail on old rows that still have no date.
+	// would fail on old rows that still have no date, and 000005 adds the
+	// NOT NULL base_price_cents column, which fails while products has any rows.
 	if *reset {
 		if err := truncateCatalog(ctx, pool); err != nil {
 			return err

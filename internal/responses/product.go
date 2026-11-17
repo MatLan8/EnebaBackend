@@ -7,9 +7,11 @@ import (
 	"eneba-backend/internal/requests"
 )
 
-// PriceResponse is the "From" price on a product card, taken from the
-// product's cheapest active offer. OriginalCents and DiscountPercent are
-// null when that offer isn't discounted.
+// PriceResponse is the price of an offer, e.g. the "From" price on a product
+// card, which comes from the product's cheapest active offer. OriginalCents is
+// the product's official base price, shown crossed out, and DiscountPercent is
+// how much cheaper the offer is than that. Both are null when the offer isn't
+// cheaper than the base price.
 type PriceResponse struct {
 	Cents           int    `json:"cents"`
 	OriginalCents   *int   `json:"originalCents"`
@@ -38,15 +40,24 @@ type ProductListResponse struct {
 	TotalPages int                       `json:"totalPages"`
 }
 
-// NewPriceResponse builds the "From" price of a product card from its cheapest
-// active offer and works out the discount.
-func NewPriceResponse(priceCents int, originalCents *int, currency string) PriceResponse {
-	return PriceResponse{
-		Cents:           priceCents,
-		OriginalCents:   originalCents,
-		DiscountPercent: discountPercent(priceCents, originalCents),
-		Currency:        currency,
+// NewPriceResponse builds the price of an offer and compares it with the
+// product's official base price, e.g. an offer of 1650 for a product with a
+// base price of 2999 -> originalCents 2999, discountPercent 45.
+// Sellers can also ask more than the base price; then there is no discount to
+// show, so originalCents and discountPercent stay null.
+func NewPriceResponse(priceCents, basePriceCents int, currency string) PriceResponse {
+	price := PriceResponse{
+		Cents:    priceCents,
+		Currency: currency,
 	}
+
+	if basePriceCents > priceCents {
+		percent := discountPercent(priceCents, basePriceCents)
+		price.OriginalCents = &basePriceCents
+		price.DiscountPercent = &percent
+	}
+
+	return price
 }
 
 // NewProductListResponse wraps one page of product cards with the paging info
@@ -61,18 +72,12 @@ func NewProductListResponse(items []ProductListItemResponse, total int, params r
 	}
 }
 
-// discountPercent is how much cheaper the price is than the original, rounded
-// to the nearest whole percent, e.g. 3299 from 5999 -> 45. It returns nil when
-// there is no original price. Adding original/2 before the integer division
-// rounds to the nearest value instead of always rounding down.
-func discountPercent(priceCents int, originalCents *int) *int {
-	if originalCents == nil || *originalCents <= 0 {
-		return nil
-	}
-
-	original := *originalCents
-	percent := ((original-priceCents)*100 + original/2) / original
-	return &percent
+// discountPercent is how much cheaper the price is than the base price, rounded
+// to the nearest whole percent, e.g. 3299 from 5999 -> 45. basePriceCents must be
+// positive. Adding basePriceCents/2 before the integer division rounds to the
+// nearest value instead of always rounding down.
+func discountPercent(priceCents, basePriceCents int) int {
+	return ((basePriceCents-priceCents)*100 + basePriceCents/2) / basePriceCents
 }
 
 // totalPages is how many pages of size limit are needed for total items,

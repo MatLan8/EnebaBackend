@@ -2,38 +2,51 @@ package responses
 
 import "testing"
 
-func TestDiscountPercent(t *testing.T) {
+func TestNewPriceResponse(t *testing.T) {
 	intPtr := func(v int) *int {
 		return &v
 	}
 
 	tests := []struct {
-		name          string
-		priceCents    int
-		originalCents *int
-		want          *int
+		name         string
+		priceCents   int
+		baseCents    int
+		wantOriginal *int
+		wantDiscount *int
 	}{
-		{"no original price", 1999, nil, nil},
-		{"rounds down", 3299, intPtr(5999), intPtr(45)}, // 45.01%
-		{"rounds up", 1000, intPtr(1999), intPtr(50)},   // 49.97%
-		{"half", 50, intPtr(100), intPtr(50)},
-		{"tiny discount", 999, intPtr(1000), intPtr(0)}, // 0.1%
-		{"almost free", 1, intPtr(10000), intPtr(100)},  // 99.99%
+		{"rounds down", 3299, 5999, intPtr(5999), intPtr(45)}, // 45.01%
+		{"rounds up", 1000, 1999, intPtr(1999), intPtr(50)},   // 49.97%
+		{"half", 50, 100, intPtr(100), intPtr(50)},
+		{"tiny discount", 999, 1000, intPtr(1000), intPtr(0)}, // 0.1%
+		{"almost free", 1, 10000, intPtr(10000), intPtr(100)}, // 99.99%
+		{"same as base price", 1999, 1999, nil, nil},
+		{"above base price", 2499, 1999, nil, nil},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := discountPercent(tt.priceCents, tt.originalCents)
+			got := NewPriceResponse(tt.priceCents, tt.baseCents, "EUR")
 
-			switch {
-			case tt.want == nil && got != nil:
-				t.Errorf("discountPercent = %d; want nil", *got)
-			case tt.want != nil && got == nil:
-				t.Errorf("discountPercent = nil; want %d", *tt.want)
-			case tt.want != nil && *got != *tt.want:
-				t.Errorf("discountPercent = %d; want %d", *got, *tt.want)
+			if got.Cents != tt.priceCents || got.Currency != "EUR" {
+				t.Errorf("cents, currency = %d, %q; want %d, %q", got.Cents, got.Currency, tt.priceCents, "EUR")
 			}
+			checkOptionalInt(t, "originalCents", got.OriginalCents, tt.wantOriginal)
+			checkOptionalInt(t, "discountPercent", got.DiscountPercent, tt.wantDiscount)
 		})
+	}
+}
+
+// checkOptionalInt compares two nullable ints, where nil means null in the JSON.
+func checkOptionalInt(t *testing.T, field string, got, want *int) {
+	t.Helper()
+
+	switch {
+	case want == nil && got != nil:
+		t.Errorf("%s = %d; want nil", field, *got)
+	case want != nil && got == nil:
+		t.Errorf("%s = nil; want %d", field, *want)
+	case want != nil && *got != *want:
+		t.Errorf("%s = %d; want %d", field, *got, *want)
 	}
 }
 

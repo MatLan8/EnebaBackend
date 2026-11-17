@@ -135,11 +135,12 @@ func (r *ProductRepository) maxActivePrice(ctx context.Context) (int, error) {
 }
 
 // cheapestActiveOffer joins every product to its single cheapest active offer as "co".
+// Only the offer's own price is needed; the discount compares it with p.base_price_cents.
 // LATERAL lets the subquery use p.id from the outer query, so it runs once per product.
 // It's an inner JOIN, so products without an active offer drop out of the list.
 // o.id breaks ties between equal prices, so the same offer is picked every time.
 const cheapestActiveOffer = `JOIN LATERAL (
-	SELECT o.price_cents, o.original_price_cents, o.currency
+	SELECT o.price_cents, o.currency
 	FROM offers o
 	WHERE o.product_id = p.id AND o.is_active
 	ORDER BY o.price_cents, o.id
@@ -166,19 +167,20 @@ var productSortOrders = map[requests.ProductSort]string{
 // productListRow is one row of the List query. Its fields are in the same order
 // as the selected columns, so pgx.RowToStructByPos can fill it.
 type productListRow struct {
-	ID                 uuid.UUID
-	Slug               string
-	Title              string
-	ImageURL           string
-	Type               models.ProductType
-	Platform           models.Platform
-	Region             models.Region
-	PriceCents         int
-	OriginalPriceCents *int // set when the cheapest offer is discounted
-	Currency           string
+	ID             uuid.UUID
+	Slug           string
+	Title          string
+	ImageURL       string
+	Type           models.ProductType
+	Platform       models.Platform
+	Region         models.Region
+	PriceCents     int // the cheapest active offer
+	BasePriceCents int // the product's official price, for the discount
+	Currency       string
 }
 
-// toResponse turns the flat row into a product card with a nested price.
+// toResponse turns the flat row into a product card with a nested price,
+// discounted against the product's base price.
 func (row productListRow) toResponse() responses.ProductListItemResponse {
 	return responses.ProductListItemResponse{
 		ID:       row.ID,
@@ -188,7 +190,7 @@ func (row productListRow) toResponse() responses.ProductListItemResponse {
 		Type:     row.Type,
 		Platform: row.Platform,
 		Region:   row.Region,
-		Price:    responses.NewPriceResponse(row.PriceCents, row.OriginalPriceCents, row.Currency),
+		Price:    responses.NewPriceResponse(row.PriceCents, row.BasePriceCents, row.Currency),
 	}
 }
 
@@ -205,7 +207,7 @@ func (r *ProductRepository) List(ctx context.Context, params requests.ProductLis
 	query := psql.
 		Select(
 			"p.id", "p.slug", "p.title", "p.image_url", "p.type", "p.platform", "p.region",
-			"co.price_cents", "co.original_price_cents", "co.currency",
+			"co.price_cents", "p.base_price_cents", "co.currency",
 		).
 		From("products p").
 		JoinClause(cheapestActiveOffer).

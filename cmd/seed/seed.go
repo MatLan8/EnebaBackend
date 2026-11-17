@@ -152,7 +152,7 @@ func seedProducts(ctx context.Context, tx pgx.Tx, products []seedProduct, genreI
 
 		productRows = append(productRows, []any{
 			id, p.Title, p.Slug, p.Description, p.ImageURL, p.Type, p.Platform, p.Region,
-			p.Developer, p.Publisher, releaseDate, soldCounts.IntN(5000),
+			p.Developer, p.Publisher, releaseDate, p.BasePriceCents, soldCounts.IntN(5000),
 		})
 
 		for _, genreID := range p.GenreIDs {
@@ -166,7 +166,7 @@ func seedProducts(ctx context.Context, tx pgx.Tx, products []seedProduct, genreI
 
 	productColumns := []string{
 		"id", "title", "slug", "description", "image_url", "type", "platform", "region",
-		"developer", "publisher", "release_date", "sold_count",
+		"developer", "publisher", "release_date", "base_price_cents", "sold_count",
 	}
 	if err := insertRows(ctx, tx, "products", productColumns, productRows); err != nil {
 		return nil, 0, err
@@ -204,7 +204,7 @@ func seedOffers(
 
 		offerID := uuid.New()
 		offerRows = append(offerRows, []any{
-			offerID, productID, sellerID, o.PriceCents, o.OriginalPriceCents, o.Currency, o.IsActive,
+			offerID, productID, sellerID, o.PriceCents, o.Currency, o.IsActive,
 		})
 
 		// The keys in the dump were encrypted by another app and can't be read,
@@ -221,7 +221,7 @@ func seedOffers(
 	}
 
 	offerColumns := []string{
-		"id", "product_id", "seller_id", "price_cents", "original_price_cents", "currency", "is_active",
+		"id", "product_id", "seller_id", "price_cents", "currency", "is_active",
 	}
 	if err := insertRows(ctx, tx, "offers", offerColumns, offerRows); err != nil {
 		return 0, 0, err

@@ -32,28 +32,28 @@ type seedSeller struct {
 }
 
 type seedProduct struct {
-	ID          int     `json:"id"`
-	Title       string  `json:"title"`
-	Slug        string  `json:"slug"`
-	Description string  `json:"description"`
-	ImageURL    string  `json:"imageUrl"`
-	Type        string  `json:"type"`
-	Platform    string  `json:"platform"`
-	Region      string  `json:"region"`
-	Developer   *string `json:"developer"`
-	Publisher   *string `json:"publisher"`
-	ReleaseDate string  `json:"releaseDate"` // "2006-01-02", required
-	GenreIDs    []int   `json:"genreIds"`
+	ID             int     `json:"id"`
+	Title          string  `json:"title"`
+	Slug           string  `json:"slug"`
+	Description    string  `json:"description"`
+	ImageURL       string  `json:"imageUrl"`
+	Type           string  `json:"type"`
+	Platform       string  `json:"platform"`
+	Region         string  `json:"region"`
+	Developer      *string `json:"developer"`
+	Publisher      *string `json:"publisher"`
+	ReleaseDate    string  `json:"releaseDate"`    // "2006-01-02", required
+	BasePriceCents int     `json:"basePriceCents"` // official store price or face value, required
+	GenreIDs       []int   `json:"genreIds"`
 }
 
 type seedOffer struct {
-	ProductID          int    `json:"productId"`
-	SellerID           int    `json:"sellerId"`
-	PriceCents         int    `json:"priceCents"`
-	OriginalPriceCents *int   `json:"originalPriceCents"`
-	Currency           string `json:"currency"`
-	IsActive           bool   `json:"isActive"`
-	KeyCount           int    `json:"keyCount"` // how many fake digital keys to generate
+	ProductID  int    `json:"productId"`
+	SellerID   int    `json:"sellerId"`
+	PriceCents int    `json:"priceCents"`
+	Currency   string `json:"currency"`
+	IsActive   bool   `json:"isActive"`
+	KeyCount   int    `json:"keyCount"` // how many fake digital keys to generate
 }
 
 // loadSeedFile reads and decodes the seed JSON file.
@@ -68,11 +68,29 @@ func loadSeedFile(path string) (*seedFile, error) {
 		return nil, fmt.Errorf("decode seed file: %w", err)
 	}
 
-	// Check the dates before anything touches the database, so a product
-	// without a release date fails the run before -reset wipes the catalog.
+	// Check the required product fields and offer prices before anything
+	// touches the database, so bad data fails the run before -reset wipes the
+	// catalog.
+	basePrices := make(map[int]int, len(data.Products))
 	for _, p := range data.Products {
 		if _, err := parseDate(p.ReleaseDate); err != nil {
 			return nil, fmt.Errorf("product %q: %w", p.Slug, err)
+		}
+		if p.BasePriceCents <= 0 {
+			return nil, fmt.Errorf("product %q: basePriceCents must be positive, got %d", p.Slug, p.BasePriceCents)
+		}
+		basePrices[p.ID] = p.BasePriceCents
+	}
+
+	// Discounts are measured against the base price, so an offer may match it
+	// but never cost more.
+	for i, o := range data.Offers {
+		basePrice, ok := basePrices[o.ProductID]
+		if ok && o.PriceCents > basePrice {
+			return nil, fmt.Errorf(
+				"offer %d (product %d): priceCents %d is above the base price %d",
+				i, o.ProductID, o.PriceCents, basePrice,
+			)
 		}
 	}
 

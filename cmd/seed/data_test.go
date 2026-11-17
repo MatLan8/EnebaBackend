@@ -29,8 +29,10 @@ func TestSeedFile_MatchesSchema(t *testing.T) {
 	}
 
 	products := make(map[int]bool)
+	basePrices := make(map[int]int)
 	for _, p := range data.Products {
 		products[p.ID] = true
+		basePrices[p.ID] = p.BasePriceCents
 		if !slices.Contains(models.ProductTypes, models.ProductType(p.Type)) {
 			t.Errorf("product %q: unknown type %q", p.Slug, p.Type)
 		}
@@ -43,6 +45,10 @@ func TestSeedFile_MatchesSchema(t *testing.T) {
 		// release_date is NOT NULL, so every product needs a valid date.
 		if _, err := parseDate(p.ReleaseDate); err != nil {
 			t.Errorf("product %q: %v", p.Slug, err)
+		}
+		// base_price_cents is NOT NULL and must be positive, discounts are measured against it.
+		if p.BasePriceCents <= 0 {
+			t.Errorf("product %q: base price must be positive", p.Slug)
 		}
 		for _, id := range p.GenreIDs {
 			if !genres[id] {
@@ -58,8 +64,9 @@ func TestSeedFile_MatchesSchema(t *testing.T) {
 		if o.PriceCents <= 0 {
 			t.Errorf("offer %d: price must be positive", i)
 		}
-		if o.OriginalPriceCents != nil && *o.OriginalPriceCents <= o.PriceCents {
-			t.Errorf("offer %d: original price must be higher than the price", i)
+		// Discounts are measured against the base price, so an offer may match it but never cost more.
+		if o.PriceCents > basePrices[o.ProductID] {
+			t.Errorf("offer %d: price %d is above the base price %d", i, o.PriceCents, basePrices[o.ProductID])
 		}
 		if o.KeyCount < 1 {
 			t.Errorf("offer %d: needs at least one key", i)
