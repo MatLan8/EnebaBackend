@@ -1,9 +1,13 @@
 // Command seed fills the catalog tables (genres, sellers, products, offers and
 // digital keys) from seed/data/seed.json, the cleaned-up export of the scraped
-// Eneba data. Run it from the project root:
+// Eneba data, and inserts the seed users. Every seed user logs in with
+// devPassword ("Password123!"). Run it from the project root:
 //
 //	go run ./cmd/seed          # only works while the products table is empty
 //	go run ./cmd/seed -reset   # wipes the catalog tables first, then migrates and seeds again
+//
+// -reset does not delete users or refresh tokens. Re-running the seed skips
+// emails that already exist, including real accounts.
 package main
 
 import (
@@ -31,7 +35,7 @@ func main() {
 
 func run() error {
 	file := flag.String("file", "seed/data/seed.json", "path to the seed data file")
-	reset := flag.Bool("reset", false, "delete all catalog data before seeding")
+	reset := flag.Bool("reset", false, "delete all catalog data before seeding; users and refresh tokens are kept")
 	flag.Parse()
 
 	// Same setup as cmd/api: .env for local runs, then the validated config.
@@ -74,10 +78,23 @@ func run() error {
 		return err
 	}
 
-	// One transaction: either the whole catalog is inserted or nothing is.
+	// Hash once and reuse it for every seed user. bcrypt would otherwise
+	// spend a second or so per user, for the same password.
+	passwordHash, err := services.HashPassword(devPassword)
+	if err != nil {
+		return err
+	}
+
+	// One transaction: either the whole catalog and the new users are
+	// inserted, or nothing is.
 	var summary seedSummary
 	err = database.WithTx(ctx, pool, func(tx pgx.Tx) error {
 		if err := ensureCatalogEmpty(ctx, tx); err != nil {
+			return err
+		}
+
+		inserted, skipped, err := seedUsers(ctx, tx, data.Users, passwordHash)
+		if err != nil {
 			return err
 		}
 
@@ -85,6 +102,8 @@ func run() error {
 		if err != nil {
 			return err
 		}
+		result.UsersInserted = inserted
+		result.UsersSkipped = skipped
 		summary = result
 		return nil
 	})
@@ -97,8 +116,9 @@ func run() error {
 	}
 
 	fmt.Printf(
-		"Seed complete: %d genres, %d sellers, %d products, %d product genres, %d offers, %d digital keys\n",
+		"Seed complete: %d genres, %d sellers, %d products, %d product genres, %d offers, %d digital keys, %d users inserted, %d users skipped\n",
 		summary.Genres, summary.Sellers, summary.Products, summary.ProductGenres, summary.Offers, summary.DigitalKeys,
+		summary.UsersInserted, summary.UsersSkipped,
 	)
 	return nil
 }

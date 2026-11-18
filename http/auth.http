@@ -15,12 +15,13 @@ Content-Type: application/json
 > {% client.global.set("accessToken", response.body.accessToken); %}
 
 ### Login
+# Seeded users in seed/data/seed.json all use the password Password123!, e.g. emma.johnson@example.com
 POST {{baseUrl}}/api/v1/auth/login
 Content-Type: application/json
 
 {
-  "email": "a@a.com",
-  "password": "bbbbbbbbbbbb"
+  "email": "emma.johnson@example.com",
+  "password": "Password123!"
 }
 
 > {% client.global.set("accessToken", response.body.accessToken); %}

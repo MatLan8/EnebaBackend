@@ -32,6 +32,8 @@ type seedSummary struct {
 	ProductGenres int
 	Offers        int
 	DigitalKeys   int
+	UsersInserted int
+	UsersSkipped  int
 }
 
 // ensureCatalogEmpty returns errCatalogNotEmpty if the products table has any rows.
@@ -48,6 +50,8 @@ func ensureCatalogEmpty(ctx context.Context, tx pgx.Tx) error {
 
 // truncateCatalog empties every catalog table. Naming them all in one TRUNCATE
 // is allowed even though they reference each other with foreign keys.
+// Users and refresh tokens are left alone, so -reset can rebuild the catalog
+// without deleting accounts.
 // It runs before the migrations, so on a fresh database the tables don't exist
 // yet and there is nothing to empty. All catalog tables come from migration
 // 000003, so checking for products is enough.

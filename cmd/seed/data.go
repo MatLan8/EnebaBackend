@@ -11,6 +11,7 @@ import (
 // used to link rows inside the file; the database gets new UUIDs.
 
 type seedFile struct {
+	Users    []seedUser    `json:"users"`
 	Genres   []seedGenre   `json:"genres"`
 	Sellers  []seedSeller  `json:"sellers"`
 	Products []seedProduct `json:"products"`
@@ -67,9 +68,14 @@ func loadSeedFile(path string) (*seedFile, error) {
 		return nil, fmt.Errorf("decode seed file: %w", err)
 	}
 
-	// Check the required product fields and offer prices before anything
+	// Check users, required product fields and offer prices before anything
 	// touches the database, so bad data fails the run before -reset wipes the
 	// catalog.
+	normalizeUsers(data.Users)
+	if err := validateUsers(data.Users); err != nil {
+		return nil, err
+	}
+
 	basePrices := make(map[int]int, len(data.Products))
 	for _, p := range data.Products {
 		if _, err := parseDate(p.ReleaseDate); err != nil {
