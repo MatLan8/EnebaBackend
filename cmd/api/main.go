@@ -69,6 +69,7 @@ func run() error {
 	productRepo := repository.NewProductRepository(pool)
 	cartRepo := repository.NewCartRepository(pool)
 	orderRepo := repository.NewOrderRepository(pool)
+	keyRepo := repository.NewKeyRepository(pool)
 
 	tokenService := services.NewTokenService(cfg)
 	stripeService := services.NewStripeService(cfg.StripeSecretKey, cfg.StripeWebhookSecret)
@@ -87,6 +88,7 @@ func run() error {
 		Cart:          handlers.NewCartHandler(pool, cartRepo, cfg.IsProduction()),
 		Checkout:      handlers.NewCheckoutHandler(pool, cartRepo, orderRepo, userRepo, stripeService, cfg.FrontendURL),
 		Orders:        handlers.NewOrderHandler(orderRepo, keyCipher),
+		Keys:          handlers.NewKeyHandler(keyRepo),
 		StripeWebhook: handlers.NewStripeWebhookHandler(pool, orderRepo, cartRepo, stripeService),
 		Tokens:        tokenService,
 	})

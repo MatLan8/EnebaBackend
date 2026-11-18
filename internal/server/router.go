@@ -25,6 +25,7 @@ type Deps struct {
 	Cart          *handlers.CartHandler
 	Checkout      *handlers.CheckoutHandler
 	Orders        *handlers.OrderHandler
+	Keys          *handlers.KeyHandler
 	StripeWebhook *handlers.StripeWebhookHandler
 	Tokens        *services.TokenService // used by the auth middleware
 }
@@ -96,6 +97,9 @@ func NewRouter(d Deps) http.Handler {
 			// The signed-in user's own orders, newest first.
 			r.Get("/orders", d.Orders.List)
 			r.Get("/orders/{id}", d.Orders.Get)
+			// The signed-in user's key library: keys from paid orders, without their codes.
+			r.Get("/keys", d.Keys.List)
+
 			r.Get("/orders/{id}/keys", d.Orders.Keys) // paid orders only; the response holds plaintext codes
 		})
 	})
