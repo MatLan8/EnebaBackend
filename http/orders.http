@@ -42,3 +42,10 @@ Authorization: Bearer {{accessToken}}
 # 400 validation_failed when the id isn't a UUID.
 GET {{baseUrl}}/api/v1/orders/{{orderId}}
 Authorization: Bearer {{accessToken}}
+
+### Get order keys
+# Paid orders only: 200 with the decrypted codes (sent with Cache-Control: no-store).
+# 409 order_not_paid (details.status pending or cancelled) for an unpaid order,
+# 404 not_found for an unknown id or another user's order.
+GET {{baseUrl}}/api/v1/orders/{{orderId}}/keys
+Authorization: Bearer {{accessToken}}

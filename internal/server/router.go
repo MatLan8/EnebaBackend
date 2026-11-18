@@ -96,6 +96,7 @@ func NewRouter(d Deps) http.Handler {
 			// The signed-in user's own orders, newest first.
 			r.Get("/orders", d.Orders.List)
 			r.Get("/orders/{id}", d.Orders.Get)
+			r.Get("/orders/{id}/keys", d.Orders.Keys) // paid orders only; the response holds plaintext codes
 		})
 	})
 

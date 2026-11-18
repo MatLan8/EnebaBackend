@@ -590,3 +590,81 @@ func (r *OrderRepository) listDetailItems(ctx context.Context, orderID uuid.UUID
 
 	return itemRows, nil
 }
+
+// GetByIDForUser returns the order with this ID if it belongs to the user, or
+// models.ErrNotFound. Another user's order looks exactly like a missing one.
+func (r *OrderRepository) GetByIDForUser(ctx context.Context, userID, orderID uuid.UUID) (models.Order, error) {
+	query, args, err := psql.
+		Select(orderColumns...).
+		From("orders").
+		Where(sq.Eq{"id": orderID, "user_id": userID}).
+		ToSql()
+	if err != nil {
+		return models.Order{}, fmt.Errorf("build select order: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return models.Order{}, fmt.Errorf("select order: %w", err)
+	}
+
+	order, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByPos[models.Order])
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.Order{}, models.ErrNotFound
+		}
+		return models.Order{}, fmt.Errorf("select order: %w", err)
+	}
+
+	return order, nil
+}
+
+// OrderKeyRow is one key of an order with its product and seller. The code is
+// still encrypted: the handler decrypts it, so plaintext codes never pass
+// through the repository. Its fields are in the same order as the columns
+// selected by ListKeys, so pgx.RowToStructByPos can fill it.
+type OrderKeyRow struct {
+	KeyID         uuid.UUID
+	CodeEncrypted []byte
+	Title         string
+	ImageURL      string
+	Type          models.ProductType
+	Platform      models.Platform
+	Region        models.Region
+	SellerName    string
+	SellerLogoURL *string
+	SellerRating  float64
+}
+
+// ListKeys returns the keys of the order, in the same order as the order's items.
+func (r *OrderRepository) ListKeys(ctx context.Context, orderID uuid.UUID) ([]OrderKeyRow, error) {
+	query, args, err := psql.
+		Select(
+			"k.id", "k.code_encrypted",
+			"p.title", "p.image_url", "p.type", "p.platform", "p.region",
+			"s.name", "s.logo_url", "s.rating",
+		).
+		From("order_items oi").
+		Join("digital_keys k ON k.id = oi.digital_key_id").
+		Join("offers f ON f.id = oi.offer_id").
+		Join("products p ON p.id = f.product_id").
+		Join("sellers s ON s.id = f.seller_id").
+		Where(sq.Eq{"oi.order_id": orderID}).
+		OrderBy("oi.created_at", "oi.id").
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build list order keys: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list order keys: %w", err)
+	}
+
+	keyRows, err := pgx.CollectRows(rows, pgx.RowToStructByPos[OrderKeyRow])
+	if err != nil {
+		return nil, fmt.Errorf("list order keys: %w", err)
+	}
+
+	return keyRows, nil
+}

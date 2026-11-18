@@ -75,6 +75,17 @@ func PaymentProviderError() *APIError {
 	return &APIError{Status: http.StatusBadGateway, Code: "payment_provider_error", Message: "the payment provider is unavailable, please try again"}
 }
 
+// OrderNotPaid builds a 409 error for asking for the keys of an order that
+// isn't paid (yet). status tells the client whether it is pending or cancelled.
+func OrderNotPaid(status string) *APIError {
+	return &APIError{
+		Status:  http.StatusConflict,
+		Code:    "order_not_paid",
+		Message: "the order is not paid, so its keys are not available",
+		Details: map[string]string{"status": status},
+	}
+}
+
 // InvalidSignature builds a 400 error for a webhook request without a valid signature.
 func InvalidSignature() *APIError {
 	return &APIError{Status: http.StatusBadRequest, Code: "invalid_signature", Message: "invalid webhook signature"}

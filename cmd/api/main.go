@@ -73,6 +73,11 @@ func run() error {
 	tokenService := services.NewTokenService(cfg)
 	stripeService := services.NewStripeService(cfg.StripeSecretKey, cfg.StripeWebhookSecret)
 
+	keyCipher, err := services.NewKeyCipher(cfg.KeyEncryptionSecret)
+	if err != nil {
+		return err
+	}
+
 	router := server.NewRouter(server.Deps{
 		Config:        cfg,
 		Health:        handlers.NewHealthHandler(pool),
@@ -81,7 +86,7 @@ func run() error {
 		Products:      handlers.NewProductHandler(productRepo),
 		Cart:          handlers.NewCartHandler(pool, cartRepo, cfg.IsProduction()),
 		Checkout:      handlers.NewCheckoutHandler(pool, cartRepo, orderRepo, userRepo, stripeService, cfg.FrontendURL),
-		Orders:        handlers.NewOrderHandler(orderRepo),
+		Orders:        handlers.NewOrderHandler(orderRepo, keyCipher),
 		StripeWebhook: handlers.NewStripeWebhookHandler(pool, orderRepo, cartRepo, stripeService),
 		Tokens:        tokenService,
 	})
