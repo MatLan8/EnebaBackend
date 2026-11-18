@@ -1,11 +1,7 @@
 package models
 
-// Go has no enum keyword. The usual pattern is a named string type plus
-// constants of that type. A ProductType can't be mixed up with a Platform by
-// accident, and the value stored in the database is still a plain string.
 // These lists must match the CHECK constraints in migrations/000003_products.up.sql.
 
-// ProductType is what kind of item a product is.
 type ProductType string
 
 const (
@@ -17,7 +13,6 @@ const (
 	ProductTypeTopUp        ProductType = "top_up" // in-game currency, e.g. FC Points
 )
 
-// ProductTypes lists every valid ProductType, e.g. for filters in the store.
 var ProductTypes = []ProductType{
 	ProductTypeGame,
 	ProductTypeDLC,
@@ -27,7 +22,6 @@ var ProductTypes = []ProductType{
 	ProductTypeTopUp,
 }
 
-// Platform is where the key is activated.
 type Platform string
 
 const (
@@ -42,7 +36,6 @@ const (
 	PlatformOfficialWebsite Platform = "official_website" // redeemed on the publisher's own site, e.g. Minecraft or Windows
 )
 
-// Platforms lists every valid Platform.
 var Platforms = []Platform{
 	PlatformSteam,
 	PlatformXboxLive,
@@ -55,7 +48,6 @@ var Platforms = []Platform{
 	PlatformOfficialWebsite,
 }
 
-// Region is where the key can be activated.
 type Region string
 
 const (
@@ -67,7 +59,6 @@ const (
 	RegionAsia         Region = "asia"
 )
 
-// Regions lists every valid Region.
 var Regions = []Region{
 	RegionGlobal,
 	RegionEurope,

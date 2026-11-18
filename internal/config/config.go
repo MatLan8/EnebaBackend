@@ -8,32 +8,29 @@ import (
 	"time"
 )
 
-// minJWTSecretLength is the shortest secret we accept for HS256 (32 bytes = 256 bits).
+// HS256 needs a secret of at least 256 bits.
 const minJWTSecretLength = 32
 
-// Config holds every setting the app reads from environment variables.
-// It is loaded once at startup and passed to whatever needs it.
 type Config struct {
-	Env         string   // "development" or "production"
-	Port        string   // HTTP port; Render sets PORT automatically
-	DatabaseURL string   // Postgres connection string (Supabase pooler URL)
-	CORSOrigins []string // frontend origins allowed to call the API
+	Env         string // "development" or "production"
+	Port        string // Render sets PORT automatically
+	DatabaseURL string // Supabase pooler URL
+	CORSOrigins []string
 
-	JWTSecret       string        // key used to sign access tokens
-	JWTIssuer       string        // "iss" claim: who created the token
-	JWTAudience     string        // "aud" claim: who the token is meant for
-	AccessTokenTTL  time.Duration // lifetime of an access token (short)
-	RefreshTokenTTL time.Duration // lifetime of a refresh token (long)
+	JWTSecret       string
+	JWTIssuer       string
+	JWTAudience     string
+	AccessTokenTTL  time.Duration
+	RefreshTokenTTL time.Duration
 
-	KeyEncryptionSecret []byte // 32 bytes used to encrypt digital keys (AES-256)
+	KeyEncryptionSecret []byte // 32 bytes (AES-256)
 
-	StripeSecretKey     string // sk_test_... locally; checked by ValidateStripe, only the API needs it
-	StripeWebhookSecret string // whsec_..., verifies that webhook requests come from Stripe
-	FrontendURL         string // where Stripe sends the buyer back after paying, without a trailing slash
+	StripeSecretKey     string // only the API needs it; see ValidateStripe
+	StripeWebhookSecret string
+	FrontendURL         string // no trailing slash
 }
 
-// Load reads the environment, applies defaults and fails fast
-// if a value is missing or invalid, so a misconfigured deploy never starts.
+// Load fails fast on missing or invalid values, so a misconfigured deploy never starts.
 func Load() (*Config, error) {
 	cfg := &Config{
 		Env:         getEnv("APP_ENV", "development"),
@@ -84,16 +81,12 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-// IsProduction reports whether the app runs in production mode.
 func (c *Config) IsProduction() bool {
 	return c.Env == "production"
 }
 
-// ValidateStripe checks the Stripe settings. It is separate from Load because
-// only the API takes payments; the seed command doesn't need Stripe keys.
-// Outside production only test keys (sk_test_) are accepted, so local runs can
-// never charge real cards. The webhook secret is required in production; locally
-// it may be empty (the API then rejects every webhook, see main.go).
+// ValidateStripe is separate from Load because the seed command doesn't need Stripe.
+// Outside production only sk_test_ keys are accepted, so local runs never charge real cards.
 func (c *Config) ValidateStripe() error {
 	if c.StripeSecretKey == "" {
 		return fmt.Errorf("missing required env var: STRIPE_SECRET_KEY")
@@ -114,7 +107,6 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
-// getDuration parses values like "15m", "24h" or "168h".
 func getDuration(key string, fallback time.Duration) (time.Duration, error) {
 	v := getEnv(key, "")
 	if v == "" {

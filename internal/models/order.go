@@ -6,7 +6,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// OrderStatus is where an order is in the payment flow.
 type OrderStatus string
 
 const (
@@ -15,8 +14,7 @@ const (
 	OrderStatusCancelled OrderStatus = "cancelled" // the payment never completed, keys are released
 )
 
-// Order mirrors a row in the orders table. TotalCents is the sum of its items'
-// prices at checkout. PaidAt is set exactly when Status is paid.
+// PaidAt is set exactly when Status is paid.
 type Order struct {
 	ID              uuid.UUID   `json:"id"`
 	PublicID        string      `json:"publicId"` // the order number shown to the buyer

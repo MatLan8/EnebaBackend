@@ -1,6 +1,4 @@
--- Extensions used across the app.
--- pg_trgm: trigram similarity, powers typo-tolerant search on product names.
--- citext:  case-insensitive text type, used for emails.
+-- pg_trgm powers typo-tolerant product search; citext makes emails case-insensitive.
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS citext;
 

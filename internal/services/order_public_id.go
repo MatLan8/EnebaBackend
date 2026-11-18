@@ -12,9 +12,7 @@ const (
 	orderPublicIDLength   = 7 // 36^7 is about 78 billion, collisions are rare and retried
 )
 
-// NewOrderPublicID returns a short random order number such as "o-k3x9q2a",
-// shown to the buyer instead of the UUID. crypto/rand makes it unguessable, so
-// one order number gives no hint about the next one.
+// crypto/rand makes order numbers unguessable, so one gives no hint about the next.
 func NewOrderPublicID() (string, error) {
 	max := big.NewInt(int64(len(orderPublicIDAlphabet)))
 

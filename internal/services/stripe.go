@@ -14,8 +14,6 @@ import (
 	"github.com/stripe/stripe-go/v87/webhook"
 )
 
-// StripeService is a small wrapper around the Stripe SDK: it creates Checkout
-// sessions and checks that webhook requests really come from Stripe.
 type StripeService struct {
 	client        *stripe.Client
 	webhookSecret string // whsec_..., signs every webhook request
@@ -28,7 +26,6 @@ func NewStripeService(secretKey, webhookSecret string) *StripeService {
 	}
 }
 
-// CheckoutLineItem is one row on the Stripe payment page.
 type CheckoutLineItem struct {
 	Name            string
 	ImageURL        string // shown only if it is an https URL
@@ -36,7 +33,6 @@ type CheckoutLineItem struct {
 	Quantity        int
 }
 
-// CheckoutSessionParams describes the payment page for one order.
 type CheckoutSessionParams struct {
 	OrderID       uuid.UUID
 	CustomerEmail string
@@ -47,15 +43,13 @@ type CheckoutSessionParams struct {
 	ExpiresAt     time.Time // Stripe accepts 30 minutes to 24 hours from now
 }
 
-// CheckoutSession is the part of a created session the API needs.
 type CheckoutSession struct {
 	ID  string // cs_test_...
 	URL string // https://checkout.stripe.com/..., where the buyer pays
 }
 
-// CreateCheckoutSession creates a Stripe-hosted payment page for the order.
-// The order ID is the idempotency key, so if a request is retried (e.g. after
-// a timeout), Stripe returns the same session instead of creating a second one.
+// The order ID is the idempotency key, so a retried request (e.g. after a timeout) returns
+// the same session instead of creating a second one.
 func (s *StripeService) CreateCheckoutSession(ctx context.Context, p CheckoutSessionParams) (CheckoutSession, error) {
 	currency := strings.ToLower(p.Currency)
 
@@ -99,24 +93,18 @@ func (s *StripeService) CreateCheckoutSession(ctx context.Context, p CheckoutSes
 	return CheckoutSession{ID: session.ID, URL: session.URL}, nil
 }
 
-// StripeEvent is a verified webhook event. Object is the raw JSON of the
-// object the event is about, e.g. the Checkout session.
+// Object is the raw JSON of the object the event is about, e.g. the Checkout session.
 type StripeEvent struct {
 	ID     string
 	Type   string
 	Object json.RawMessage
 }
 
-// ErrWebhookNotConfigured is returned when STRIPE_WEBHOOK_SECRET is empty.
 // Without a secret no request can be trusted, so all of them are rejected.
 var ErrWebhookNotConfigured = errors.New("stripe webhook secret is not configured")
 
-// ConstructEvent checks the Stripe-Signature header against the raw body and
-// returns the event. Any change to the body, a wrong secret or a signature
-// older than 5 minutes makes it fail.
-// API version differences are ignored, because only a few stable fields of
-// the session are read (see requests.StripeCheckoutSession), and events sent
-// by `stripe listen` use the account's API version, not the SDK's.
+// Signatures older than 5 minutes fail. API version mismatches are ignored: only a few stable
+// session fields are read, and `stripe listen` sends events in the account's API version.
 func (s *StripeService) ConstructEvent(payload []byte, signatureHeader string) (StripeEvent, error) {
 	if s.webhookSecret == "" {
 		return StripeEvent{}, ErrWebhookNotConfigured

@@ -14,26 +14,20 @@ const (
 	defaultOrderPageLimit = 10
 	maxOrderPageLimit     = 60
 
-	// maxOrderPublicIDSearchLength stops very long search strings. A full public
-	// ID such as "o-k3x9q2a" is 9 characters.
+	// A full public ID such as "o-k3x9q2a" is 9 characters.
 	maxOrderPublicIDSearchLength = 32
 )
 
-// OrderListParams is what the signed-in user's order list is filtered and paged
-// by, read from the query string of GET /api/v1/orders.
 type OrderListParams struct {
-	PublicID string // part of an order's public ID, any case; "" means no filter
-	Page     int    // starts at 1
-	Limit    int    // orders per page
+	PublicID string // part of the public ID, any case; "" means no filter
+	Page     int
+	Limit    int
 }
 
-// Offset is the number of rows to skip to reach Page.
 func (p OrderListParams) Offset() int {
 	return (p.Page - 1) * p.Limit
 }
 
-// ParseOrderListQuery reads the query string of GET /api/v1/orders.
-// Every parameter is optional: ?publicId=k3x&page=2&limit=10.
 func ParseOrderListQuery(query url.Values) (OrderListParams, error) {
 	params := OrderListParams{
 		PublicID: strings.TrimSpace(query.Get("publicId")),
@@ -48,8 +42,7 @@ func ParseOrderListQuery(query url.Values) (OrderListParams, error) {
 	return params, nil
 }
 
-// Validate checks the params. Every problem found is returned at once as a 400
-// validation error, keyed by query parameter name.
+// Every problem is returned at once, keyed by query parameter name.
 func (p OrderListParams) Validate() error {
 	details := map[string]string{}
 
@@ -70,9 +63,7 @@ func (p OrderListParams) Validate() error {
 	return nil
 }
 
-// intOrDefault reads a whole number from the query string. An empty value gives
-// fallback. Anything that isn't a whole number gives 0, which is never a valid
-// page or limit, so Validate reports it.
+// Anything that isn't a whole number gives 0, which is never a valid page or limit, so Validate reports it.
 func intOrDefault(raw string, fallback int) int {
 	if raw == "" {
 		return fallback

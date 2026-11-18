@@ -19,8 +19,6 @@ func NewUserHandler(users *repository.UserRepository) *UserHandler {
 	return &UserHandler{users: users}
 }
 
-// Me handles GET /api/v1/users/me and returns the signed-in user.
-// It runs behind middleware.Authenticate, which has already checked the access token.
 func (h *UserHandler) Me(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

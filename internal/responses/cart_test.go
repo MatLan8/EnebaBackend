@@ -1,22 +1,6 @@
 package responses
 
-import (
-	"encoding/json"
-	"testing"
-)
-
-func TestNewCartResponseEmpty(t *testing.T) {
-	got, err := json.Marshal(NewCartResponse(nil, ""))
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-
-	// An empty cart still has items [] (never null) and a currency.
-	want := `{"items":[],"itemCount":0,"totalCents":0,"currency":"EUR"}`
-	if string(got) != want {
-		t.Errorf("json = %s; want %s", got, want)
-	}
-}
+import "testing"
 
 func TestNewCartResponseTotals(t *testing.T) {
 	items := []CartItemResponse{

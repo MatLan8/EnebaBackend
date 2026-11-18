@@ -8,14 +8,10 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 )
 
-// RequestLogger writes one log line per request with method, path,
-// status code, duration and request ID.
 func RequestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
-		// The wrapper records the status code the handler writes,
-		// which plain http.ResponseWriter doesn't expose.
 		ww := chimw.NewWrapResponseWriter(w, r.ProtoMajor)
 
 		next.ServeHTTP(ww, r)
@@ -35,7 +31,6 @@ func RequestLogger(next http.Handler) http.Handler {
 	})
 }
 
-// levelForStatus logs server errors as errors, client errors as warnings.
 func levelForStatus(status int) slog.Level {
 	switch {
 	case status >= 500:

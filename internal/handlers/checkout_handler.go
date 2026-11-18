@@ -22,22 +22,19 @@ import (
 )
 
 const (
-	// checkoutSessionTTL is how long the Stripe payment page stays open. Stripe's
-	// minimum is 30 minutes; the extra minute covers the time the request takes.
-	// The keys are reserved a bit longer (see repository.keyReservationMinutes).
+	// Stripe's minimum is 30 minutes; the extra minute covers the request itself.
+	// Keys are reserved a bit longer (see repository.keyReservationMinutes).
 	checkoutSessionTTL = 31 * time.Minute
-	// publicIDAttempts is how many random order numbers are tried before giving up.
-	publicIDAttempts = 5
+	publicIDAttempts   = 5
 )
 
-// CheckoutHandler turns the browser's cart into an order and a Stripe payment page.
 type CheckoutHandler struct {
-	pool        *pgxpool.Pool // needed to start transactions
+	pool        *pgxpool.Pool
 	carts       *repository.CartRepository
 	orders      *repository.OrderRepository
 	users       *repository.UserRepository
 	stripe      *services.StripeService
-	frontendURL string // where Stripe sends the buyer back to
+	frontendURL string
 }
 
 func NewCheckoutHandler(
@@ -58,16 +55,9 @@ func NewCheckoutHandler(
 	}
 }
 
-// Create handles POST /api/v1/checkout. It needs a signed-in user and the
-// cart_token cookie, and has no body.
-//
-//  1. In one transaction: reserve a key for every item in the cart and create a
-//     pending order with one order item per key, priced at the current offer price.
-//  2. Create a Stripe Checkout session for the order and answer with its URL.
-//
-// The cart is not emptied here. It is emptied by the Stripe webhook once the
-// payment succeeds, so a buyer who cancels on Stripe still has their cart.
-// Keys are released when Stripe reports the session as expired.
+// Create reserves the cart's keys and creates a pending order in one transaction, then opens a
+// Stripe Checkout session. The cart is only emptied by the webhook after payment, so a buyer
+// who cancels on Stripe keeps it; an expired session releases the keys.
 func (h *CheckoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -101,8 +91,7 @@ func (h *CheckoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 		carts := h.carts.WithTx(tx)
 		orders := h.orders.WithTx(tx)
 
-		// Locking the cart makes a second checkout of the same cart (e.g. a
-		// double click) wait until this one is done.
+		// Locking the cart makes a second checkout of it (e.g. a double click) wait for this one.
 		if err := lockExistingCart(ctx, carts, cartID); err != nil {
 			if errors.Is(err, models.ErrNotFound) {
 				return httpx.CartEmpty()
@@ -143,8 +132,7 @@ func (h *CheckoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The Stripe call happens after the commit: a slow network call should not
-	// keep the cart and the keys locked.
+	// Stripe is called after the commit, so a slow network call doesn't keep the cart and keys locked.
 	session, err := h.stripe.CreateCheckoutSession(ctx, services.CheckoutSessionParams{
 		OrderID:       orderID,
 		CustomerEmail: user.Email,
@@ -157,8 +145,7 @@ func (h *CheckoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(ctx, "stripe checkout session failed", "order_id", orderID, "error", err)
 
-		// Undo the order so its keys can be bought again. context.WithoutCancel:
-		// this must run even if the client has already gone away.
+		// Release the keys; WithoutCancel so this runs even if the client has gone away.
 		if cancelErr := h.cancelOrder(context.WithoutCancel(ctx), orderID); cancelErr != nil {
 			slog.ErrorContext(ctx, "cancel order after stripe failure", "order_id", orderID, "error", cancelErr)
 		}
@@ -167,8 +154,7 @@ func (h *CheckoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If saving the session ID fails, the webhook still finds the order through
-	// the order_id in the session's metadata, so the buyer can go on and pay.
+	// Not fatal: the webhook also finds the order by the order_id in the session metadata.
 	if err := h.orders.SetStripeSession(ctx, orderID, session.ID); err != nil {
 		slog.ErrorContext(ctx, "save stripe session id", "order_id", orderID, "error", err)
 	}
@@ -180,16 +166,12 @@ func (h *CheckoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// cancelOrder cancels an order whose Stripe session couldn't be created.
 func (h *CheckoutHandler) cancelOrder(ctx context.Context, orderID uuid.UUID) error {
 	return database.WithTx(ctx, h.pool, func(tx pgx.Tx) error {
 		return h.orders.WithTx(tx).Cancel(ctx, orderID)
 	})
 }
 
-// summarizeCheckout checks the cart can be bought and returns its total and
-// currency. An empty cart is a 400 cart_empty, an inactive offer a 409
-// offer_unavailable. Prices are the offers' live prices.
 func summarizeCheckout(lines []repository.CheckoutLine) (int, string, error) {
 	if len(lines) == 0 {
 		return 0, "", httpx.CartEmpty()
@@ -211,9 +193,6 @@ func summarizeCheckout(lines []repository.CheckoutLine) (int, string, error) {
 	return totalCents, currency, nil
 }
 
-// reserveKeys takes quantity available keys for every line and holds them for
-// this checkout. It returns one order item per key. If an offer has fewer keys
-// left than the cart wants, it returns a 409 insufficient_stock for that offer.
 func reserveKeys(ctx context.Context, orders *repository.OrderRepository, lines []repository.CheckoutLine) ([]repository.NewOrderItem, error) {
 	var items []repository.NewOrderItem
 
@@ -242,8 +221,6 @@ func reserveKeys(ctx context.Context, orders *repository.OrderRepository, lines 
 	return items, nil
 }
 
-// createPendingOrder inserts the order with a new random public ID, trying
-// again with another ID if one is already taken.
 func createPendingOrder(ctx context.Context, orders *repository.OrderRepository, order repository.NewOrder) (uuid.UUID, error) {
 	for range publicIDAttempts {
 		publicID, err := services.NewOrderPublicID()
@@ -264,10 +241,7 @@ func createPendingOrder(ctx context.Context, orders *repository.OrderRepository,
 	return uuid.Nil, fmt.Errorf("create order: no free public id after %d attempts", publicIDAttempts)
 }
 
-// checkoutLineItems turns the cart lines into rows on the Stripe page: one row
-// per offer, with the number of keys as the quantity. A cart has each offer once
-// already, but lines for the same offer are merged anyway, so Stripe never shows
-// the same offer twice.
+// One Stripe row per offer with the key count as quantity; lines of the same offer are merged.
 func checkoutLineItems(lines []repository.CheckoutLine) []services.CheckoutLineItem {
 	items := make([]services.CheckoutLineItem, 0, len(lines))
 	indexByOffer := make(map[uuid.UUID]int, len(lines))

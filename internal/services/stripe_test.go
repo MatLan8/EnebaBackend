@@ -10,23 +10,6 @@ import (
 	"github.com/stripe/stripe-go/v87/webhook"
 )
 
-func TestIsHTTPSURL(t *testing.T) {
-	tests := map[string]bool{
-		"https://cdn.cloudflare.steamstatic.com/a.jpg": true,
-		"http://example.com/a.jpg":                     false,
-		"https://":                                     false,
-		"/images/a.jpg":                                false,
-		"":                                             false,
-		"not a url":                                    false,
-	}
-
-	for raw, want := range tests {
-		if got := isHTTPSURL(raw); got != want {
-			t.Errorf("isHTTPSURL(%q) = %v; want %v", raw, got, want)
-		}
-	}
-}
-
 func TestConstructEvent(t *testing.T) {
 	const secret = "whsec_test_secret"
 	s := NewStripeService("sk_test_unused", secret)

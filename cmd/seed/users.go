@@ -10,8 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// devPassword is the shared password for every user in seed/data/seed.json.
-// It meets the register rules (8 to 72 characters). Do not use it in production.
+// devPassword is shared by every seed user. Never use it in production.
 const devPassword = "Password123!"
 
 const (
@@ -32,9 +31,7 @@ func normalizeUsers(users []seedUser) {
 	}
 }
 
-// validateUsers checks the seed users before any database work. Names and
-// emails must be non-empty, emails must be unique, lowercase and valid, and
-// lengths follow the same limits as POST /api/v1/auth/register.
+// validateUsers applies the same limits as POST /api/v1/auth/register, before any database work.
 func validateUsers(users []seedUser) error {
 	seen := make(map[string]int, len(users))
 	for i, u := range users {
@@ -90,9 +87,7 @@ func validSeedEmail(email string) bool {
 	return at > 0 && strings.Contains(email[at+1:], ".")
 }
 
-// seedUsers inserts the seed users. Existing rows with the same email,
-// including real accounts, are left unchanged. inserted is how many new
-// rows were written; skipped is how many emails were already present.
+// Existing emails, including real accounts, are skipped and left unchanged.
 func seedUsers(ctx context.Context, tx pgx.Tx, users []seedUser, passwordHash string) (inserted, skipped int, err error) {
 	if len(users) == 0 {
 		return 0, 0, nil

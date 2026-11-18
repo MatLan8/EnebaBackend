@@ -12,8 +12,7 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"     // registers the "file://" source
 )
 
-// Migrate applies every pending migration from the migrations folder.
-// It runs on startup, so each deploy brings the schema up to date by itself.
+// Runs on startup, so each deploy brings the schema up to date by itself.
 func Migrate(databaseURL, dir string) error {
 	m, err := migrate.New("file://"+dir, toMigrateURL(databaseURL))
 	if err != nil {
@@ -50,8 +49,7 @@ func Migrate(databaseURL, dir string) error {
 	return nil
 }
 
-// golang-migrate's pgx v5 driver expects the "pgx5://" scheme
-// instead of "postgres://" or "postgresql://".
+// golang-migrate's pgx v5 driver expects "pgx5://" instead of "postgres://" or "postgresql://".
 func toMigrateURL(url string) string {
 	for _, prefix := range []string{"postgresql://", "postgres://"} {
 		if strings.HasPrefix(url, prefix) {

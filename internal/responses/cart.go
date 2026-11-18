@@ -6,8 +6,7 @@ import (
 	"eneba-backend/internal/models"
 )
 
-// CartResponse is returned by GET /api/v1/cart and by every cart change except
-// DELETE /api/v1/cart, so the frontend never has to fetch the cart again.
+// Returned by every cart change except DELETE /api/v1/cart, so the frontend never refetches.
 // Prices are read live from the offers; they are only locked in at checkout.
 type CartResponse struct {
 	Items      []CartItemResponse `json:"items"`
@@ -16,8 +15,7 @@ type CartResponse struct {
 	Currency   string             `json:"currency"`
 }
 
-// CartItemResponse is one offer in the cart. The line price is
-// PriceCents x Quantity, worked out by the frontend.
+// The line price (PriceCents x Quantity) is worked out by the frontend.
 type CartItemResponse struct {
 	OfferID           uuid.UUID           `json:"offerId"`
 	Quantity          int                 `json:"quantity"`
@@ -39,9 +37,7 @@ type CartSellerResponse struct {
 	LogoURL *string `json:"logoUrl"`
 }
 
-// NewCartResponse adds up the items into a cart. A nil items becomes an empty
-// slice, so the JSON has [] and not null. An empty currency (an empty cart)
-// becomes models.DefaultCurrency.
+// An empty currency (an empty cart) becomes models.DefaultCurrency.
 func NewCartResponse(items []CartItemResponse, currency string) CartResponse {
 	if items == nil {
 		items = []CartItemResponse{}

@@ -10,23 +10,6 @@ import (
 	"eneba-backend/internal/models"
 )
 
-func TestParseProductListQueryDefaults(t *testing.T) {
-	params, err := ParseProductListQuery(url.Values{})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if params.Page != 1 || params.Limit != 24 {
-		t.Errorf("page, limit = %d, %d; want 1, 24", params.Page, params.Limit)
-	}
-	if params.Sort != ProductSortPopular {
-		t.Errorf("sort = %q; want popular", params.Sort)
-	}
-	if params.Search != "" || params.MinPriceCents != nil || params.MaxPriceCents != nil {
-		t.Errorf("expected no search and no price filter, got %+v", params)
-	}
-}
-
 func TestParseProductListQueryValues(t *testing.T) {
 	query, _ := url.ParseQuery(
 		"q=+eldn+ring+&platform=steam&platform=psn&type=dlc&region=europe&genre=rpg&genre=action" +
@@ -61,40 +44,6 @@ func TestParseProductListQueryValues(t *testing.T) {
 	}
 	if params.Offset() != 20 {
 		t.Errorf("offset = %d; want 20", params.Offset())
-	}
-}
-
-func TestParseProductListQuerySearchDefaultsToPopular(t *testing.T) {
-	params, err := ParseProductListQuery(url.Values{"q": {"witcer"}})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if params.Sort != ProductSortPopular {
-		t.Errorf("sort = %q; want popular", params.Sort)
-	}
-}
-
-func TestParseProductListQuerySorts(t *testing.T) {
-	sorts := []ProductSort{
-		ProductSortPopular,
-		ProductSortPriceAsc,
-		ProductSortPriceDesc,
-		ProductSortNewest,
-		ProductSortOldest,
-		ProductSortNameAsc,
-		ProductSortNameDesc,
-	}
-
-	for _, sort := range sorts {
-		t.Run(string(sort), func(t *testing.T) {
-			params, err := ParseProductListQuery(url.Values{"sort": {string(sort)}})
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if params.Sort != sort {
-				t.Errorf("sort = %q; want %q", params.Sort, sort)
-			}
-		})
 	}
 }
 

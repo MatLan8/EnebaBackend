@@ -6,9 +6,8 @@ import (
 	"os"
 )
 
-// The types below match the layout of seed/data/seed.json.
-// IDs in the file are the integer IDs from the scraped dump. They are only
-// used to link rows inside the file; the database gets new UUIDs.
+// These types match seed/data/seed.json. Its integer IDs only link rows inside the
+// file; the database gets new UUIDs.
 
 type seedFile struct {
 	Users    []seedUser    `json:"users"`
@@ -56,7 +55,6 @@ type seedOffer struct {
 	KeyCount   int    `json:"keyCount"` // how many fake digital keys to generate
 }
 
-// loadSeedFile reads and decodes the seed JSON file.
 func loadSeedFile(path string) (*seedFile, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -68,9 +66,7 @@ func loadSeedFile(path string) (*seedFile, error) {
 		return nil, fmt.Errorf("decode seed file: %w", err)
 	}
 
-	// Check users, required product fields and offer prices before anything
-	// touches the database, so bad data fails the run before -reset wipes the
-	// catalog.
+	// Validate everything before touching the database, so bad data fails before -reset wipes the catalog.
 	normalizeUsers(data.Users)
 	if err := validateUsers(data.Users); err != nil {
 		return nil, err
@@ -87,8 +83,7 @@ func loadSeedFile(path string) (*seedFile, error) {
 		basePrices[p.ID] = p.BasePriceCents
 	}
 
-	// Discounts are measured against the base price, so an offer may match it
-	// but never cost more.
+	// Discounts are measured against the base price, so an offer may match it but never cost more.
 	for i, o := range data.Offers {
 		basePrice, ok := basePrices[o.ProductID]
 		if ok && o.PriceCents > basePrice {

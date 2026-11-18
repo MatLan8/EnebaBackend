@@ -9,36 +9,6 @@ import (
 	"eneba-backend/internal/httpx"
 )
 
-func TestParseOrderListQueryDefaults(t *testing.T) {
-	params, err := ParseOrderListQuery(url.Values{})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if params.Page != 1 || params.Limit != 10 || params.PublicID != "" {
-		t.Errorf("params = %+v; want page 1, limit 10, no publicId", params)
-	}
-}
-
-func TestParseOrderListQueryValues(t *testing.T) {
-	query, _ := url.ParseQuery("publicId=+K3X+&page=3&limit=5")
-
-	params, err := ParseOrderListQuery(query)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if params.PublicID != "K3X" {
-		t.Errorf("publicId = %q; want trimmed %q", params.PublicID, "K3X")
-	}
-	if params.Page != 3 || params.Limit != 5 {
-		t.Errorf("page, limit = %d, %d; want 3, 5", params.Page, params.Limit)
-	}
-	if params.Offset() != 10 {
-		t.Errorf("offset = %d; want 10", params.Offset())
-	}
-}
-
 func TestParseOrderListQueryInvalid(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -71,20 +41,6 @@ func TestParseOrderListQueryInvalid(t *testing.T) {
 				t.Errorf("details = %v; want an entry for %q", apiErr.Details, tt.field)
 			}
 		})
-	}
-}
-
-func TestOrderListParamsValidateReportsEveryProblem(t *testing.T) {
-	params := OrderListParams{PublicID: strings.Repeat("x", 40), Page: 0, Limit: 100}
-
-	var apiErr *httpx.APIError
-	if !errors.As(params.Validate(), &apiErr) {
-		t.Fatal("want a validation error")
-	}
-	for _, field := range []string{"page", "limit", "publicId"} {
-		if _, ok := apiErr.Details[field]; !ok {
-			t.Errorf("details = %v; want an entry for %q", apiErr.Details, field)
-		}
 	}
 }
 

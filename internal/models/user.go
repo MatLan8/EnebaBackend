@@ -6,7 +6,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// User mirrors a row in the users table.
 type User struct {
 	ID           uuid.UUID `json:"id"`
 	Name         string    `json:"name"`

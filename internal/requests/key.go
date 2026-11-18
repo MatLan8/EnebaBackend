@@ -15,21 +15,16 @@ const (
 	maxKeySearchLength  = 100
 )
 
-// KeyListParams is what the signed-in user's key library is searched and paged
-// by, read from the query string of GET /api/v1/keys.
 type KeyListParams struct {
-	Search string // part of a product title or an order's public ID, any case; "" means no search
-	Page   int    // starts at 1
-	Limit  int    // keys per page
+	Search string // product title or order public ID, any case; "" means no search
+	Page   int
+	Limit  int
 }
 
-// Offset is the number of rows to skip to reach Page.
 func (p KeyListParams) Offset() int {
 	return (p.Page - 1) * p.Limit
 }
 
-// ParseKeyListQuery reads the query string of GET /api/v1/keys.
-// Every parameter is optional: ?q=elden&page=2&limit=10.
 func ParseKeyListQuery(query url.Values) (KeyListParams, error) {
 	params := KeyListParams{
 		Search: strings.TrimSpace(query.Get("q")),
@@ -44,8 +39,7 @@ func ParseKeyListQuery(query url.Values) (KeyListParams, error) {
 	return params, nil
 }
 
-// Validate checks the params. Every problem found is returned at once as a 400
-// validation error, keyed by query parameter name.
+// Every problem is returned at once, keyed by query parameter name.
 func (p KeyListParams) Validate() error {
 	details := map[string]string{}
 

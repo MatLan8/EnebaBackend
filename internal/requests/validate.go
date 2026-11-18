@@ -11,7 +11,7 @@ import (
 	"eneba-backend/internal/httpx"
 )
 
-// validate is created once and reused; it caches struct metadata and is safe for concurrent use.
+// Created once: it caches struct metadata and is safe for concurrent use.
 var validate = newValidator()
 
 func newValidator() *validator.Validate {
@@ -29,8 +29,6 @@ func newValidator() *validator.Validate {
 	return v
 }
 
-// Validate checks the `validate` tags on a request struct.
-// On failure it returns a 400 *httpx.APIError listing every invalid field.
 func Validate(req any) error {
 	err := validate.Struct(req)
 	if err == nil {
@@ -49,7 +47,6 @@ func Validate(req any) error {
 	return httpx.ValidationFailed(details)
 }
 
-// messageFor turns a failed rule into a human readable message.
 func messageFor(fe validator.FieldError) string {
 	switch fe.Tag() {
 	case "required":

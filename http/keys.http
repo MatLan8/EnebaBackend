@@ -1,13 +1,6 @@
-# Key library of the signed-in user: every key from their PAID orders, newest
-# purchase first. The codes are not included; open an order's keys with
-# GET /api/v1/orders/{id}/keys (see orders.http) to see them.
-# Run "Login" first; GoLand's HTTP client keeps {{accessToken}} for the requests below.
-#
-# Query parameters (all optional):
-#   page   page number, starts at 1 (default 1)
-#   limit  keys per page, 1 to 60 (default 10)
-#   q      part of a product title or an order's public ID, any case,
-#          e.g. "elden" or "o-7j7"
+# Keys from the signed-in user's PAID orders, without codes (see GET /api/v1/orders/{id}/keys).
+# Run "Login" first. Query (all optional): page (default 1), limit 1 to 60 (default 10),
+# q (part of a product title or order public ID, any case).
 
 ### Login
 # Seeded users all use the password Password123!.

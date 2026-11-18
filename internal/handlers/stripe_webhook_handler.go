@@ -18,17 +18,13 @@ import (
 	"eneba-backend/internal/services"
 )
 
-// maxWebhookBodyBytes caps the webhook body. Checkout session events are a few KB.
+// Checkout session events are a few KB.
 const maxWebhookBodyBytes = 64 << 10
 
-// StripeWebhookHandler receives events from Stripe.
-//
-// Why a webhook and not the success redirect: the redirect comes from the
-// buyer's browser, which can close before it arrives, and anyone can open the
-// success URL without paying. The webhook comes from Stripe itself, is signed
-// with STRIPE_WEBHOOK_SECRET, and Stripe retries it until it gets a 2xx.
+// Payment is confirmed by this webhook, not the success redirect: the buyer's browser can close
+// before the redirect, and anyone can open the success URL. Webhooks are signed and retried by Stripe.
 type StripeWebhookHandler struct {
-	pool   *pgxpool.Pool // needed to start transactions
+	pool   *pgxpool.Pool
 	orders *repository.OrderRepository
 	carts  *repository.CartRepository
 	stripe *services.StripeService
@@ -43,7 +39,6 @@ func NewStripeWebhookHandler(
 	return &StripeWebhookHandler{pool: pool, orders: orders, carts: carts, stripe: stripe}
 }
 
-// webhookAction is what an event asks us to do with its order.
 type webhookAction int
 
 const (
@@ -52,10 +47,8 @@ const (
 	webhookCancel                        // the payment page expired: release the keys
 )
 
-// webhookActionFor decides what to do with an event. It is a pure function, so
-// the rules can be tested without Stripe or a database.
-// payment_status can be "unpaid" on checkout.session.completed for delayed
-// payment methods (e.g. bank transfers); cards are always "paid" right away.
+// payment_status can be "unpaid" on checkout.session.completed for delayed methods
+// (e.g. bank transfers); cards are always "paid" right away.
 func webhookActionFor(eventType, paymentStatus string) webhookAction {
 	switch eventType {
 	case "checkout.session.completed":
@@ -70,7 +63,6 @@ func webhookActionFor(eventType, paymentStatus string) webhookAction {
 	}
 }
 
-// paidOutcome is what a payment does to an order, depending on its status.
 type paidOutcome int
 
 const (
@@ -79,7 +71,6 @@ const (
 	paidAfterCancelling                    // cancelled: the money came in after the keys were released
 )
 
-// paidOutcomeFor decides what a payment does to an order in the given status.
 func paidOutcomeFor(status models.OrderStatus) paidOutcome {
 	switch status {
 	case models.OrderStatusPaid:
@@ -91,15 +82,12 @@ func paidOutcomeFor(status models.OrderStatus) paidOutcome {
 	}
 }
 
-// Handle handles POST /api/v1/webhooks/stripe. It is public: instead of a
-// token, every request must carry a valid Stripe-Signature header.
-// It answers 200 for every event it has dealt with or chosen to ignore, and 500
-// when the database fails, so that Stripe sends the event again later.
+// Public, authenticated by the Stripe-Signature header. Database errors answer 500 so Stripe
+// retries; every event handled or ignored gets a 200.
 func (h *StripeWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// The signature covers the exact bytes Stripe sent, so the raw body is read
-	// as-is (no JSON decoding first).
+	// The signature covers the exact bytes Stripe sent, so the raw body is read without decoding.
 	payload, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxWebhookBodyBytes))
 	if err != nil {
 		slog.WarnContext(ctx, "stripe webhook rejected: body too large or unreadable", "error", err)
@@ -117,15 +105,13 @@ func (h *StripeWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	session, err := requests.ParseStripeCheckoutSession(event.Object)
 	if err != nil {
-		// Not a Checkout session event (or not one we can read): nothing to do.
 		slog.InfoContext(ctx, "stripe webhook ignored", "event_id", event.ID, "type", event.Type)
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	// markPaid and cancel log the order_id of the order they found. The order ID
-	// from the session's metadata is logged separately; sessions not created by
-	// our checkout (e.g. from `stripe trigger`) don't have one.
+	// The metadata order_id is logged separately; sessions not created by our checkout
+	// (e.g. `stripe trigger`) don't have one.
 	log := slog.With("event_id", event.ID, "type", event.Type, "stripe_session_id", session.ID)
 	if metadataOrderID, ok := session.OrderID(); ok {
 		log = log.With("metadata_order_id", metadataOrderID)
@@ -155,10 +141,8 @@ func (h *StripeWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// markPaid sells the order's keys once Stripe reports the payment.
-// The order row is locked first, so if Stripe delivers the event twice at the
-// same time, the second delivery waits, then sees "paid" and does nothing.
-// That makes the webhook idempotent: keys and sold counts change only once.
+// Locking the order makes the webhook idempotent: a duplicate delivery waits, then sees "paid"
+// and does nothing, so keys and sold counts change only once.
 func (h *StripeWebhookHandler) markPaid(ctx context.Context, log *slog.Logger, session requests.StripeCheckoutSession) error {
 	orderID, _ := session.OrderID()
 
@@ -175,10 +159,8 @@ func (h *StripeWebhookHandler) markPaid(ctx context.Context, log *slog.Logger, s
 			log.InfoContext(ctx, "stripe webhook: order already paid", "order_id", order.ID)
 			return nil
 		case paidAfterCancelling:
-			// The order was cancelled (its session expired, or creating the session
-			// looked like it failed) and its keys were released, so we no longer know
-			// which keys it had. Stripe doesn't let an expired session be paid, so
-			// this should not happen; if it does, someone has to refund by hand.
+			// Its keys were released, so we no longer know which ones it had. Stripe doesn't allow paying
+			// an expired session, so this shouldn't happen; if it does, refund by hand.
 			log.ErrorContext(ctx, "stripe webhook: payment for a cancelled order, refund manually", "order_id", order.ID)
 			return nil
 		}
@@ -209,7 +191,6 @@ func (h *StripeWebhookHandler) markPaid(ctx context.Context, log *slog.Logger, s
 	})
 }
 
-// cancel releases the keys of an order whose payment page expired unpaid.
 // Paid or already cancelled orders are left alone.
 func (h *StripeWebhookHandler) cancel(ctx context.Context, log *slog.Logger, session requests.StripeCheckoutSession) error {
 	orderID, _ := session.OrderID()

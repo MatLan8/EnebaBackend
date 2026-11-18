@@ -8,8 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// NewPool creates a Postgres connection pool and verifies it with a ping,
-// so a wrong connection string fails at startup instead of on the first request.
+// The ping makes a wrong connection string fail at startup instead of on the first request.
 func NewPool(ctx context.Context, url string) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {

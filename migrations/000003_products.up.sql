@@ -1,5 +1,4 @@
--- Catalog: products, genres, sellers, offers and the digital keys they sell.
--- The allowed values in the CHECK constraints below must match the constants in internal/models/product_enums.go.
+-- The CHECK values below must match the constants in internal/models/product_enums.go.
 
 CREATE TABLE products (
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -27,7 +26,6 @@ CREATE TABLE genres (
     slug TEXT NOT NULL UNIQUE
 );
 
--- Many-to-many join table between products and genres.
 CREATE TABLE product_genres (
     product_id UUID NOT NULL REFERENCES products (id) ON DELETE CASCADE,
     genre_id   UUID NOT NULL REFERENCES genres (id) ON DELETE CASCADE,

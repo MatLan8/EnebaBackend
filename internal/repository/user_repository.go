@@ -13,7 +13,7 @@ import (
 	"eneba-backend/internal/models"
 )
 
-// userColumns is the column list used by every query, in the order scanUser expects.
+// In the order scanUser expects.
 var userColumns = []string{"id", "name", "email", "password_hash", "created_at", "updated_at"}
 
 type UserRepository struct {
@@ -24,13 +24,10 @@ func NewUserRepository(db DBTX) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-// WithTx returns a copy of the repository that runs its queries inside tx.
 func (r *UserRepository) WithTx(tx pgx.Tx) *UserRepository {
 	return &UserRepository{db: tx}
 }
 
-// Create inserts a user and returns the stored row.
-// It returns models.ErrEmailTaken if the email is already registered.
 func (r *UserRepository) Create(ctx context.Context, name, email, passwordHash string) (*models.User, error) {
 	query, args, err := psql.
 		Insert("users").
@@ -53,18 +50,15 @@ func (r *UserRepository) Create(ctx context.Context, name, email, passwordHash s
 	return user, nil
 }
 
-// GetByEmail returns models.ErrNotFound if no user has this email.
 // The email column is CITEXT, so the match is case-insensitive.
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	return r.getOne(ctx, sq.Eq{"email": email})
 }
 
-// GetByID returns models.ErrNotFound if the user doesn't exist.
 func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	return r.getOne(ctx, sq.Eq{"id": id})
 }
 
-// getOne runs a SELECT for a single user matching where.
 func (r *UserRepository) getOne(ctx context.Context, where sq.Sqlizer) (*models.User, error) {
 	query, args, err := psql.
 		Select(userColumns...).
@@ -86,7 +80,7 @@ func (r *UserRepository) getOne(ctx context.Context, where sq.Sqlizer) (*models.
 	return user, nil
 }
 
-// scanUser reads one row into a models.User. The order must match userColumns.
+// The order must match userColumns.
 func scanUser(row pgx.Row) (*models.User, error) {
 	var u models.User
 

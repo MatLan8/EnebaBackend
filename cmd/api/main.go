@@ -27,11 +27,9 @@ func main() {
 	}
 }
 
-// run is the real entry point. Returning an error instead of calling
-// os.Exit everywhere keeps deferred cleanup working.
+// run returns errors instead of calling os.Exit, so deferred cleanup still runs.
 func run() error {
-	// Load .env for local development. On Render the file doesn't exist
-	// and the real environment variables are used instead.
+	// .env is only for local runs; on Render the real environment variables are used.
 	_ = godotenv.Load()
 
 	cfg, err := config.Load()
@@ -52,7 +50,6 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Bring the schema up to date before serving traffic.
 	if err := database.Migrate(cfg.DatabaseURL, "migrations"); err != nil {
 		return err
 	}
@@ -63,7 +60,6 @@ func run() error {
 	}
 	defer pool.Close()
 	slog.Info("database connected")
-	// Wire dependencies by hand: repositories and shared services -> handlers.
 	userRepo := repository.NewUserRepository(pool)
 	refreshTokenRepo := repository.NewRefreshTokenRepository(pool)
 	productRepo := repository.NewProductRepository(pool)
@@ -102,7 +98,6 @@ func run() error {
 		IdleTimeout:       60 * time.Second,
 	}
 
-	// Run the server in a goroutine so main can wait for a shutdown signal.
 	errCh := make(chan error, 1)
 	go func() {
 		slog.Info("server starting", "port", cfg.Port, "env", cfg.Env)
@@ -114,13 +109,12 @@ func run() error {
 
 	select {
 	case err := <-errCh:
-		return err // server failed to start, e.g. port already in use
+		return err
 	case <-ctx.Done():
 		slog.Info("shutdown signal received")
 	}
 
-	// Graceful shutdown: stop accepting new requests and give
-	// in-flight ones up to 10 seconds to finish.
+	// Graceful shutdown: in-flight requests get up to 10 seconds to finish.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
@@ -130,8 +124,7 @@ func run() error {
 	return nil
 }
 
-// newLogger returns readable text logs locally and JSON logs in production,
-// which Render's log viewer can search and filter.
+// JSON logs in production (searchable in Render), readable text locally.
 func newLogger(cfg *config.Config) *slog.Logger {
 	if cfg.IsProduction() {
 		return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))

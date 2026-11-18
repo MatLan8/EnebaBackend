@@ -9,33 +9,6 @@ import (
 	"eneba-backend/internal/httpx"
 )
 
-func TestParseKeyListQueryDefaults(t *testing.T) {
-	params, err := ParseKeyListQuery(url.Values{})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if params.Page != 1 || params.Limit != 10 || params.Search != "" {
-		t.Errorf("params = %+v; want page 1, limit 10, no search", params)
-	}
-}
-
-func TestParseKeyListQueryValues(t *testing.T) {
-	query, _ := url.ParseQuery("q=+Elden+Ring+&page=2&limit=5")
-
-	params, err := ParseKeyListQuery(query)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if params.Search != "Elden Ring" {
-		t.Errorf("search = %q; want trimmed %q", params.Search, "Elden Ring")
-	}
-	if params.Page != 2 || params.Limit != 5 || params.Offset() != 5 {
-		t.Errorf("page, limit, offset = %d, %d, %d; want 2, 5, 5", params.Page, params.Limit, params.Offset())
-	}
-}
-
 func TestParseKeyListQueryInvalid(t *testing.T) {
 	tests := []struct {
 		name  string

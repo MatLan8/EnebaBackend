@@ -16,16 +16,12 @@ import (
 	"eneba-backend/internal/services"
 )
 
-// errCatalogNotEmpty stops the seed from adding a second copy of the catalog.
 var errCatalogNotEmpty = errors.New("catalog already has data")
 
-// psql writes Postgres placeholders ($1, $2, ...), same as in the repository package.
 var psql = sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 
-// batchSize is how many rows go into one INSERT statement.
 const batchSize = 500
 
-// seedSummary counts the rows inserted into each table.
 type seedSummary struct {
 	Genres        int
 	Sellers       int
@@ -37,7 +33,6 @@ type seedSummary struct {
 	UsersSkipped  int
 }
 
-// ensureCatalogEmpty returns errCatalogNotEmpty if the products table has any rows.
 func ensureCatalogEmpty(ctx context.Context, tx pgx.Tx) error {
 	var hasProducts bool
 	if err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM products)").Scan(&hasProducts); err != nil {
@@ -49,18 +44,9 @@ func ensureCatalogEmpty(ctx context.Context, tx pgx.Tx) error {
 	return nil
 }
 
-// truncateCatalog empties every catalog table. Naming them all in one TRUNCATE
-// is allowed even though they reference each other with foreign keys.
-// Users and refresh tokens are left alone, so -reset can rebuild the catalog
-// without deleting accounts.
-// cart_items, carts, order_items and orders are emptied too when they exist,
-// because cart and order items reference offers and keys and would otherwise
-// block TRUNCATE. Carts and orders without items are useless, so they go as
-// well; cart cookies then simply point to no cart.
-// It runs before the migrations, so on a fresh database the tables don't exist
-// yet and there is nothing to empty. The catalog tables come from migration
-// 000003, so checking for products is enough. The cart and order tables come
-// from later migrations and are checked separately.
+// One TRUNCATE may name tables that reference each other. Users and refresh tokens are kept;
+// carts and orders go too, because their items reference offers and keys. It runs before the
+// migrations, so tables that don't exist yet (fresh database) are skipped.
 func truncateCatalog(ctx context.Context, pool *pgxpool.Pool) error {
 	var exists bool
 	if err := pool.QueryRow(ctx, "SELECT to_regclass('products') IS NOT NULL").Scan(&exists); err != nil {
@@ -90,8 +76,7 @@ func truncateCatalog(ctx context.Context, pool *pgxpool.Pool) error {
 	return nil
 }
 
-// seedCatalog inserts everything from the seed file. Parents go first
-// (genres, sellers, products) so the foreign keys of later rows are valid.
+// Parents go first (genres, sellers, products) so the later foreign keys are valid.
 func seedCatalog(ctx context.Context, tx pgx.Tx, data *seedFile, keyCipher *services.KeyCipher) (seedSummary, error) {
 	var summary seedSummary
 
@@ -124,7 +109,6 @@ func seedCatalog(ctx context.Context, tx pgx.Tx, data *seedFile, keyCipher *serv
 	return summary, nil
 }
 
-// seedGenres inserts the genres and returns a map from dump ID to new UUID.
 func seedGenres(ctx context.Context, tx pgx.Tx, genres []seedGenre) (map[int]uuid.UUID, error) {
 	ids := make(map[int]uuid.UUID, len(genres))
 	rows := make([][]any, 0, len(genres))
@@ -138,7 +122,6 @@ func seedGenres(ctx context.Context, tx pgx.Tx, genres []seedGenre) (map[int]uui
 	return ids, err
 }
 
-// seedSellers inserts the sellers and returns a map from dump ID to new UUID.
 func seedSellers(ctx context.Context, tx pgx.Tx, sellers []seedSeller) (map[int]uuid.UUID, error) {
 	ids := make(map[int]uuid.UUID, len(sellers))
 	rows := make([][]any, 0, len(sellers))
@@ -153,12 +136,9 @@ func seedSellers(ctx context.Context, tx pgx.Tx, sellers []seedSeller) (map[int]
 	return ids, err
 }
 
-// seedProducts inserts the products and their genre links. It returns a map
-// from dump ID to new UUID and the number of product_genres rows.
 func seedProducts(ctx context.Context, tx pgx.Tx, products []seedProduct, genreIDs map[int]uuid.UUID) (map[int]uuid.UUID, int, error) {
-	// The dump has no sales numbers, so sold_count gets a random value to make
-	// best sellers and the popularity sort meaningful. The fixed seed gives the
-	// same numbers on every run, so the homepage looks the same after a reseed.
+	// The dump has no sales numbers, so sold_count is random. The fixed seed keeps the
+	// numbers (and the home page) the same after every reseed.
 	soldCounts := rand.New(rand.NewPCG(2027, 1))
 
 	ids := make(map[int]uuid.UUID, len(products))
@@ -201,8 +181,6 @@ func seedProducts(ctx context.Context, tx pgx.Tx, products []seedProduct, genreI
 	return ids, len(genreRows), nil
 }
 
-// seedOffers inserts the offers and generates their digital keys.
-// It returns how many offers and keys were inserted.
 func seedOffers(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -230,8 +208,7 @@ func seedOffers(
 			offerID, productID, sellerID, o.PriceCents, o.Currency, o.IsActive,
 		})
 
-		// The keys in the dump were encrypted by another app and can't be read,
-		// so each offer gets the same number of new fake keys, encrypted with our cipher.
+		// The dump's keys were encrypted by another app, so each offer gets new fake keys.
 		for range o.KeyCount {
 			code := generateKeyCode()
 			for usedCodes[code] {
@@ -256,9 +233,8 @@ func seedOffers(
 	return len(offerRows), len(keyRows), nil
 }
 
-// insertRows inserts rows into table in batches. One INSERT with many rows is
-// much faster than one INSERT per row, and batching keeps each statement well
-// under Postgres' limit of 65535 parameters.
+// One INSERT with many rows is much faster than one per row; batches stay well under
+// Postgres' limit of 65535 parameters.
 func insertRows(ctx context.Context, tx pgx.Tx, table string, columns []string, rows [][]any) error {
 	for start := 0; start < len(rows); start += batchSize {
 		end := min(start+batchSize, len(rows))
@@ -279,7 +255,6 @@ func insertRows(ctx context.Context, tx pgx.Tx, table string, columns []string, 
 	return nil
 }
 
-// parseDate turns "2006-01-02" into a time for the NOT NULL release_date column.
 func parseDate(value string) (time.Time, error) {
 	if value == "" {
 		return time.Time{}, errors.New("missing release date")

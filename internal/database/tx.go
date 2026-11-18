@@ -8,8 +8,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// WithTx runs fn inside a transaction. It commits if fn returns nil
-// and rolls back if fn returns an error or panics.
 func WithTx(ctx context.Context, pool *pgxpool.Pool, fn func(tx pgx.Tx) error) (err error) {
 	tx, err := pool.Begin(ctx)
 	if err != nil {

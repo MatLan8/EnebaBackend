@@ -9,9 +9,8 @@ import (
 	"eneba-backend/internal/requests"
 )
 
-// OrderListItemResponse is one row of the signed-in user's order history.
-// ProductTitle is the title of the order's first item. It is null for a
-// cancelled order, because cancelling deletes the order's items to free its keys.
+// ProductTitle is the first item's title; null for a cancelled order, because cancelling deletes
+// the items to free their keys.
 type OrderListItemResponse struct {
 	ID           uuid.UUID          `json:"id"`
 	PublicID     string             `json:"publicId"`
@@ -22,8 +21,6 @@ type OrderListItemResponse struct {
 	Currency     string             `json:"currency"`
 }
 
-// OrderListResponse is returned by GET /api/v1/orders. The paging fields are
-// the same as in ProductListResponse.
 type OrderListResponse struct {
 	Items      []OrderListItemResponse `json:"items"`
 	Page       int                     `json:"page"`
@@ -32,8 +29,6 @@ type OrderListResponse struct {
 	TotalPages int                     `json:"totalPages"`
 }
 
-// NewOrderListResponse wraps one page of orders with the paging info the
-// client needs to show page numbers.
 func NewOrderListResponse(items []OrderListItemResponse, total int, params requests.OrderListParams) OrderListResponse {
 	return OrderListResponse{
 		Items:      items,

@@ -6,9 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Product mirrors a row in the products table.
-// Pointer fields are nullable columns. BasePriceCents is the official store
-// price (or a gift card's face value) in cents, which offer discounts are measured against.
+// BasePriceCents is the official price (or a gift card's face value) that offer discounts are measured against.
 type Product struct {
 	ID             uuid.UUID   `json:"id"`
 	Title          string      `json:"title"`

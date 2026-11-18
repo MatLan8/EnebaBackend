@@ -15,9 +15,8 @@ import (
 	"eneba-backend/internal/responses"
 )
 
-// keyReservationMinutes is how long checkout holds keys for a buyer. It is a bit
-// longer than the Stripe session (31 minutes), so a buyer who pays at the last
-// second still has their keys when the payment webhook arrives.
+// A bit longer than the Stripe session (31 minutes), so a buyer who pays at the last second
+// still has their keys when the webhook arrives.
 const keyReservationMinutes = 35
 
 type OrderRepository struct {
@@ -28,16 +27,14 @@ func NewOrderRepository(db DBTX) *OrderRepository {
 	return &OrderRepository{db: db}
 }
 
-// WithTx returns a copy of the repository that runs its queries inside tx.
 func (r *OrderRepository) WithTx(tx pgx.Tx) *OrderRepository {
 	return &OrderRepository{db: tx}
 }
 
-// CheckoutLine is one cart item with everything checkout needs from its offer and product.
 type CheckoutLine struct {
 	OfferID    uuid.UUID
 	Quantity   int
-	PriceCents int // the offer's price right now
+	PriceCents int // live offer price
 	Currency   string
 	IsActive   bool
 	ProductID  uuid.UUID
@@ -45,10 +42,8 @@ type CheckoutLine struct {
 	ImageURL   string
 }
 
-// ListCheckoutLines returns the cart's items with their live offer prices, in
-// the same order as the cart shows them.
-// The offers are only read, not locked: the cart's add-item locks the offer and
-// then the cart, so locking them here in the other order could deadlock.
+// The offers are only read, not locked: adding to the cart locks the offer and then the cart,
+// so locking them here in the other order could deadlock.
 func (r *OrderRepository) ListCheckoutLines(ctx context.Context, cartID uuid.UUID) ([]CheckoutLine, error) {
 	query, args, err := psql.
 		Select(
@@ -73,14 +68,9 @@ func (r *OrderRepository) ListCheckoutLines(ctx context.Context, cartID uuid.UUI
 	return pgx.CollectRows(rows, pgx.RowToStructByPos[CheckoutLine])
 }
 
-// LockAvailableKeys locks up to limit available keys of the offer, oldest first,
-// and returns their IDs. Fewer than limit means there isn't enough stock.
-//
-// FOR UPDATE SKIP LOCKED: keys another checkout has locked right now are skipped
-// instead of waited for, so two buyers of the same offer never get the same key
-// and never block each other. Keys that are still in an order (e.g. a pending
-// order whose reservation ran out) are skipped too, because order_items allows
-// each key only once.
+// FOR UPDATE SKIP LOCKED skips keys another checkout holds instead of waiting, so two buyers never
+// get the same key or block each other. Keys still in an order are skipped too (order_items is
+// UNIQUE per key). Fewer than limit IDs means there isn't enough stock.
 func (r *OrderRepository) LockAvailableKeys(ctx context.Context, offerID uuid.UUID, limit int) ([]uuid.UUID, error) {
 	query, args, err := psql.
 		Select("k.id").
@@ -104,8 +94,7 @@ func (r *OrderRepository) LockAvailableKeys(ctx context.Context, offerID uuid.UU
 	return pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 }
 
-// ReserveKeys holds the keys for a checkout for keyReservationMinutes. The time
-// comes from the database clock, the same clock availableKeyCondition compares with.
+// Uses the database clock, the same one availableKeyCondition compares with.
 func (r *OrderRepository) ReserveKeys(ctx context.Context, keyIDs []uuid.UUID) error {
 	query, args, err := psql.
 		Update("digital_keys").
@@ -123,7 +112,6 @@ func (r *OrderRepository) ReserveKeys(ctx context.Context, keyIDs []uuid.UUID) e
 	return nil
 }
 
-// NewOrder holds the values of an order being created at checkout.
 type NewOrder struct {
 	PublicID   string
 	UserID     uuid.UUID
@@ -132,10 +120,8 @@ type NewOrder struct {
 	Currency   string
 }
 
-// CreateOrder inserts a pending order and returns its ID. ok is false if the
-// public ID is already taken; the caller then tries again with a new one.
-// ON CONFLICT DO NOTHING is used instead of catching the unique violation,
-// because any error inside a Postgres transaction aborts the whole transaction.
+// ON CONFLICT DO NOTHING instead of catching the unique violation, because any error inside a
+// Postgres transaction aborts it. ok is false if the public ID is taken; the caller retries.
 func (r *OrderRepository) CreateOrder(ctx context.Context, order NewOrder) (uuid.UUID, bool, error) {
 	query, args, err := psql.
 		Insert("orders").
@@ -158,14 +144,12 @@ func (r *OrderRepository) CreateOrder(ctx context.Context, order NewOrder) (uuid
 	return orderID, true, nil
 }
 
-// NewOrderItem is one key bought in an order, with the price it was sold at.
 type NewOrderItem struct {
 	OfferID        uuid.UUID
 	DigitalKeyID   uuid.UUID
 	UnitPriceCents int
 }
 
-// CreateOrderItems inserts one order_items row per key, all in one statement.
 func (r *OrderRepository) CreateOrderItems(ctx context.Context, orderID uuid.UUID, items []NewOrderItem) error {
 	insert := psql.
 		Insert("order_items").
@@ -186,7 +170,6 @@ func (r *OrderRepository) CreateOrderItems(ctx context.Context, orderID uuid.UUI
 	return nil
 }
 
-// SetStripeSession saves the ID of the Stripe Checkout session paying for the order.
 func (r *OrderRepository) SetStripeSession(ctx context.Context, orderID uuid.UUID, sessionID string) error {
 	query, args, err := psql.
 		Update("orders").
@@ -204,16 +187,14 @@ func (r *OrderRepository) SetStripeSession(ctx context.Context, orderID uuid.UUI
 	return nil
 }
 
-// orderColumns is the column list of GetForUpdate, in models.Order's field order.
+// In models.Order's field order.
 var orderColumns = []string{
 	"id", "public_id", "user_id", "status", "total_cents", "currency",
 	"stripe_session_id", "created_at", "paid_at", "cart_id",
 }
 
-// GetForUpdate finds the order by its Stripe session ID, or by orderID when the
-// session ID was never saved (see the checkout handler), and locks it until the
-// transaction ends, so two deliveries of the same webhook run one after the other.
-// Returns models.ErrNotFound if no order matches.
+// Falls back to orderID when the session ID was never saved. The row lock makes two deliveries
+// of the same webhook run one after the other.
 func (r *OrderRepository) GetForUpdate(ctx context.Context, sessionID string, orderID uuid.UUID) (models.Order, error) {
 	query, args, err := psql.
 		Select(orderColumns...).
@@ -242,11 +223,9 @@ func (r *OrderRepository) GetForUpdate(ctx context.Context, sessionID string, or
 	return order, nil
 }
 
-// orderKeyIDs selects the IDs of the keys in an order.
 const orderKeyIDs = "SELECT oi.digital_key_id FROM order_items oi WHERE oi.order_id = ?"
 
-// MarkPaid sets the order to paid. The session ID is filled in if checkout
-// couldn't save it.
+// The session ID is filled in if checkout couldn't save it.
 func (r *OrderRepository) MarkPaid(ctx context.Context, orderID uuid.UUID, sessionID string) error {
 	query, args, err := psql.
 		Update("orders").
@@ -266,8 +245,6 @@ func (r *OrderRepository) MarkPaid(ctx context.Context, orderID uuid.UUID, sessi
 	return nil
 }
 
-// MarkKeysSold sells every key of the order: sold_at is set and the
-// reservation is no longer needed.
 func (r *OrderRepository) MarkKeysSold(ctx context.Context, orderID uuid.UUID) error {
 	query, args, err := psql.
 		Update("digital_keys").
@@ -286,8 +263,7 @@ func (r *OrderRepository) MarkKeysSold(ctx context.Context, orderID uuid.UUID) e
 	return nil
 }
 
-// IncrementSoldCounts adds the order's keys to products.sold_count, the number
-// behind "best sellers" and the popularity sort. One key is one sale.
+// sold_count drives "best sellers" and the popularity sort; one key is one sale.
 func (r *OrderRepository) IncrementSoldCounts(ctx context.Context, orderID uuid.UUID) error {
 	const query = `UPDATE products p
 SET sold_count = p.sold_count + sold.keys
@@ -307,9 +283,8 @@ WHERE p.id = sold.product_id`
 	return nil
 }
 
-// Cancel sets the order to cancelled, releases its keys and deletes its items.
-// The items have to go: order_items.digital_key_id is UNIQUE, so a key that
-// stays in a cancelled order could never be bought again.
+// The items are deleted because order_items.digital_key_id is UNIQUE, so a key left in a
+// cancelled order could never be bought again.
 func (r *OrderRepository) Cancel(ctx context.Context, orderID uuid.UUID) error {
 	release, args, err := psql.
 		Update("digital_keys").
@@ -350,10 +325,8 @@ func (r *OrderRepository) Cancel(ctx context.Context, orderID uuid.UUID) error {
 	return nil
 }
 
-// firstOrderItemTitle joins the title of each order's first item onto "orders o"
-// as first_item.title. LATERAL lets the subquery use o.id from the outer row, so
-// it runs once per order and LIMIT 1 keeps only the first item. It is a LEFT
-// JOIN, so an order without items (a cancelled one) is still listed, with a NULL title.
+// LATERAL with LIMIT 1 picks each order's first item title. LEFT JOIN, so a cancelled order
+// (its items are deleted) is still listed, with a NULL title.
 const firstOrderItemTitle = `LEFT JOIN LATERAL (
 	SELECT p.title
 	FROM order_items oi
@@ -364,14 +337,13 @@ const firstOrderItemTitle = `LEFT JOIN LATERAL (
 	LIMIT 1
 ) first_item ON true`
 
-// orderListRow is one row of the ListByUser query. Its fields are in the same
-// order as the selected columns, so pgx.RowToStructByPos can fill it.
+// Fields follow the order of the selected columns (RowToStructByPos).
 type orderListRow struct {
 	ID           uuid.UUID
 	PublicID     string
 	CreatedAt    time.Time
 	Status       models.OrderStatus
-	ProductTitle *string // NULL when the order has no items
+	ProductTitle *string // NULL for a cancelled order (no items)
 	TotalCents   int
 	Currency     string
 }
@@ -388,8 +360,6 @@ func (row orderListRow) toResponse() responses.OrderListItemResponse {
 	}
 }
 
-// ListByUser returns one page of the user's orders, newest first, plus the
-// total number of orders matching params.
 func (r *OrderRepository) ListByUser(ctx context.Context, userID uuid.UUID, params requests.OrderListParams) ([]responses.OrderListItemResponse, int, error) {
 	where := orderListWhere(userID, params)
 
@@ -398,8 +368,7 @@ func (r *OrderRepository) ListByUser(ctx context.Context, userID uuid.UUID, para
 		return nil, 0, fmt.Errorf("count orders: %w", err)
 	}
 
-	// Orders created in the same instant would come back in random order, so one
-	// could appear on two pages; id makes the order unique.
+	// id breaks ties between orders created in the same instant, so none appears on two pages.
 	query, args, err := psql.
 		Select(
 			"o.id", "o.public_id", "o.created_at", "o.status",
@@ -435,8 +404,7 @@ func (r *OrderRepository) ListByUser(ctx context.Context, userID uuid.UUID, para
 	return items, total, nil
 }
 
-// countList counts every order matching where, ignoring paging. The filters
-// only use orders columns, so no join is needed.
+// The filters only use orders columns, so no join is needed.
 func (r *OrderRepository) countList(ctx context.Context, where sq.And) (int, error) {
 	query, args, err := psql.
 		Select("COUNT(*)").
@@ -455,9 +423,7 @@ func (r *OrderRepository) countList(ctx context.Context, where sq.And) (int, err
 	return total, nil
 }
 
-// orderListWhere limits the list to the user's own orders and applies the
-// optional public ID search. ILIKE finds the text anywhere in the public ID, in
-// any case ("K3X" -> "o-k3x9q2a"); escapeLike makes % and _ match literally.
+// escapeLike makes % and _ in the search match literally.
 func orderListWhere(userID uuid.UUID, params requests.OrderListParams) sq.And {
 	where := sq.And{
 		sq.Eq{"o.user_id": userID},
@@ -470,8 +436,7 @@ func orderListWhere(userID uuid.UUID, params requests.OrderListParams) sq.And {
 	return where
 }
 
-// orderDetailRow is the order part of GET /api/v1/orders/{id}, in the same
-// order as the columns selected by getDetailRow.
+// Fields follow the columns selected by getDetailRow.
 type orderDetailRow struct {
 	ID         uuid.UUID
 	PublicID   string
@@ -482,8 +447,7 @@ type orderDetailRow struct {
 	Currency   string
 }
 
-// orderDetailItemRow is one row of listDetailItems. Its fields are in the same
-// order as the selected columns, so pgx.RowToStructByPos can fill it.
+// Fields follow the order of the selected columns (RowToStructByPos).
 type orderDetailItemRow struct {
 	ID             uuid.UUID
 	Title          string
@@ -492,10 +456,8 @@ type orderDetailItemRow struct {
 	SellerName     string
 }
 
-// GetByUser returns the user's order with its items, or models.ErrNotFound when
-// there is no such order or it belongs to someone else.
-// It runs two simple queries, the order and then its items, instead of one big
-// join, so an order without items (a cancelled one) needs no special case.
+// Two simple queries (order, then items) instead of one join, so an order without items
+// (a cancelled one) needs no special case.
 func (r *OrderRepository) GetByUser(ctx context.Context, userID, orderID uuid.UUID) (responses.OrderDetailResponse, error) {
 	order, err := r.getDetailRow(ctx, userID, orderID)
 	if err != nil {
@@ -507,7 +469,7 @@ func (r *OrderRepository) GetByUser(ctx context.Context, userID, orderID uuid.UU
 		return responses.OrderDetailResponse{}, err
 	}
 
-	// make(..., 0, n) so an order without items has [] in the JSON, not null.
+	// make(..., 0, n) so no items is [] in the JSON, not null.
 	items := make([]responses.OrderDetailItemResponse, 0, len(itemRows))
 	for _, row := range itemRows {
 		items = append(items, responses.OrderDetailItemResponse{
@@ -532,9 +494,7 @@ func (r *OrderRepository) GetByUser(ctx context.Context, userID, orderID uuid.UU
 	}, nil
 }
 
-// getDetailRow selects the order with this ID if it belongs to the user, or
-// returns models.ErrNotFound. Checking user_id in the same WHERE means another
-// user's order looks exactly like a missing one.
+// Checking user_id in the same WHERE makes another user's order look exactly like a missing one (404).
 func (r *OrderRepository) getDetailRow(ctx context.Context, userID, orderID uuid.UUID) (orderDetailRow, error) {
 	query, args, err := psql.
 		Select("o.id", "o.public_id", "o.created_at", "o.paid_at", "o.status", "o.total_cents", "o.currency").
@@ -550,7 +510,6 @@ func (r *OrderRepository) getDetailRow(ctx context.Context, userID, orderID uuid
 		return orderDetailRow{}, fmt.Errorf("select order: %w", err)
 	}
 
-	// CollectExactlyOneRow returns pgx.ErrNoRows when nothing matched.
 	order, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByPos[orderDetailRow])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -562,8 +521,7 @@ func (r *OrderRepository) getDetailRow(ctx context.Context, userID, orderID uuid
 	return order, nil
 }
 
-// listDetailItems returns the order's items with their product and seller, in
-// the same order the order list uses to pick productTitle.
+// Same item order the order list uses to pick productTitle.
 func (r *OrderRepository) listDetailItems(ctx context.Context, orderID uuid.UUID) ([]orderDetailItemRow, error) {
 	query, args, err := psql.
 		Select("oi.id", "p.title", "p.image_url", "oi.unit_price_cents", "s.name").
@@ -591,8 +549,7 @@ func (r *OrderRepository) listDetailItems(ctx context.Context, orderID uuid.UUID
 	return itemRows, nil
 }
 
-// GetByIDForUser returns the order with this ID if it belongs to the user, or
-// models.ErrNotFound. Another user's order looks exactly like a missing one.
+// Another user's order looks exactly like a missing one.
 func (r *OrderRepository) GetByIDForUser(ctx context.Context, userID, orderID uuid.UUID) (models.Order, error) {
 	query, args, err := psql.
 		Select(orderColumns...).
@@ -619,10 +576,8 @@ func (r *OrderRepository) GetByIDForUser(ctx context.Context, userID, orderID uu
 	return order, nil
 }
 
-// OrderKeyRow is one key of an order with its product and seller. The code is
-// still encrypted: the handler decrypts it, so plaintext codes never pass
-// through the repository. Its fields are in the same order as the columns
-// selected by ListKeys, so pgx.RowToStructByPos can fill it.
+// The code is still encrypted: the handler decrypts it, so plaintext codes never pass through
+// the repository. Fields follow the columns selected by ListKeys.
 type OrderKeyRow struct {
 	KeyID         uuid.UUID
 	CodeEncrypted []byte
@@ -636,7 +591,7 @@ type OrderKeyRow struct {
 	SellerRating  float64
 }
 
-// ListKeys returns the keys of the order, in the same order as the order's items.
+// Same order as the order's items.
 func (r *OrderRepository) ListKeys(ctx context.Context, orderID uuid.UUID) ([]OrderKeyRow, error) {
 	query, args, err := psql.
 		Select(

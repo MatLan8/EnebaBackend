@@ -8,7 +8,7 @@ import (
 	"eneba-backend/internal/models"
 )
 
-// UserResponse is the public view of a user. It deliberately has no password field.
+// Deliberately has no password field.
 type UserResponse struct {
 	ID        uuid.UUID `json:"id"`
 	Name      string    `json:"name"`
@@ -25,7 +25,6 @@ func NewUserResponse(u *models.User) UserResponse {
 	}
 }
 
-// AuthResponse is returned by register, login and refresh.
 // The refresh token is not here: it travels only in the HttpOnly cookie.
 type AuthResponse struct {
 	AccessToken string       `json:"accessToken"`

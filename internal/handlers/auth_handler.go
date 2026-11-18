@@ -18,7 +18,7 @@ import (
 )
 
 type AuthHandler struct {
-	pool          *pgxpool.Pool // needed to start transactions
+	pool          *pgxpool.Pool
 	users         *repository.UserRepository
 	refreshTokens *repository.RefreshTokenRepository
 	tokens        *services.TokenService
@@ -41,8 +41,6 @@ func NewAuthHandler(
 	}
 }
 
-// Register handles POST /api/v1/auth/register.
-// It creates the user and signs them in straight away.
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -67,8 +65,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var user *models.User
 	var tokens *services.IssuedTokens
 
-	// The user and their first refresh token are saved in one transaction,
-	// so if either insert fails, neither is kept.
+	// One transaction, so a user is never saved without their first refresh token.
 	err = database.WithTx(ctx, h.pool, func(tx pgx.Tx) error {
 		var err error
 
@@ -89,9 +86,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusCreated, newAuthResponse(user, tokens))
 }
 
-// Login handles POST /api/v1/auth/login.
-// Unknown email and wrong password return the same invalid_credentials error,
-// so the response does not reveal which emails are registered.
+// Unknown email and wrong password give the same error, so registered emails aren't revealed.
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -132,11 +127,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, newAuthResponse(user, tokens))
 }
 
-// Refresh handles POST /api/v1/auth/refresh.
-// It needs only the refresh_token cookie. The token is rotated: the old one is
-// revoked, a new one is set in the cookie, and a new access token is returned.
-// If an already rotated token is used again, it was most likely stolen, so
-// every session of that user is revoked.
+// Refresh rotates the token: the old one is revoked and a new one is set in the cookie.
+// Reusing a rotated token means it was probably stolen, so every session of the user is revoked.
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -163,8 +155,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if stored.ReplacedByTokenHash != nil {
-			// Reuse detected. Return nil (not an error) so the transaction
-			// commits the revocation; the 401 is sent after it.
+			// Reuse: return nil so the transaction commits the revocation; the 401 is sent after it.
 			reused = true
 			return refreshTokens.RevokeAllForUser(ctx, stored.UserID)
 		}
@@ -192,7 +183,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		if errors.Is(err, models.ErrInvalidToken) {
-			h.clearRefreshCookie(w) // the cookie is useless now, so remove it
+			h.clearRefreshCookie(w)
 		}
 		httpx.Error(w, r, err)
 		return
@@ -202,15 +193,12 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, newAuthResponse(user, tokens))
 }
 
-// Logout handles POST /api/v1/auth/logout.
-// It only needs the refresh_token cookie: the token is revoked and the cookie cleared.
-// It always returns 204, even if there was no cookie, so logging out twice is harmless.
+// Logout always returns 204, even without a cookie, so logging out twice is harmless.
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	cookie, err := r.Cookie(refreshCookieName)
 	if err != nil || cookie.Value == "" {
-		// No cookie means there is nothing to revoke.
 		h.clearRefreshCookie(w)
 		httpx.NoContent(w)
 		return
@@ -226,7 +214,6 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	httpx.NoContent(w)
 }
 
-// newAuthResponse builds the JSON body returned by register, login and refresh.
 func newAuthResponse(user *models.User, tokens *services.IssuedTokens) responses.AuthResponse {
 	return responses.AuthResponse{
 		AccessToken: tokens.AccessToken,

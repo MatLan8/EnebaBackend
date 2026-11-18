@@ -1,15 +1,7 @@
-# Order history of the signed-in user. Run "Login" first; GoLand's HTTP client
-# keeps {{accessToken}} for the requests below. Without a token the API answers 401.
-#
-# Query parameters (all optional):
-#   page      page number, starts at 1 (default 1)
-#   limit     orders per page, 1 to 60 (default 10)
-#   publicId  part of an order's public ID, any case, e.g. "k3x" finds "o-k3x9q2a"
-#
-# Orders are newest first and include every status: pending, paid and cancelled.
-# productTitle is the title of the order's first item; it is null for cancelled
-# orders, whose items are deleted when they are cancelled.
-#
+# Run "Login" first; without a token the API answers 401.
+# Query (all optional): page (default 1), limit 1 to 60 (default 10), publicId (part, any case).
+# Every status is listed; productTitle is null for cancelled orders (their items are deleted).
+
 # orderId is one of emma's orders; replace it with an id from "List orders".
 @orderId = aa0bc79b-a3aa-419e-99b7-718fa277506f
 

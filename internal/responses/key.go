@@ -8,8 +8,7 @@ import (
 	"eneba-backend/internal/requests"
 )
 
-// KeyListItemResponse is one key in the signed-in user's key library. It has
-// no code: the codes are only sent by GET /api/v1/orders/{id}/keys.
+// No code: codes are only sent by GET /api/v1/orders/{id}/keys.
 type KeyListItemResponse struct {
 	ID              uuid.UUID `json:"id"` // the digital key's ID
 	OrderID         uuid.UUID `json:"orderId"`
@@ -21,8 +20,6 @@ type KeyListItemResponse struct {
 	PriceCents      int       `json:"priceCents"` // the price paid for this key
 }
 
-// KeyListResponse is returned by GET /api/v1/keys. The paging fields are the
-// same as in OrderListResponse.
 type KeyListResponse struct {
 	Items      []KeyListItemResponse `json:"items"`
 	Page       int                   `json:"page"`
@@ -31,8 +28,6 @@ type KeyListResponse struct {
 	TotalPages int                   `json:"totalPages"`
 }
 
-// NewKeyListResponse wraps one page of keys with the paging info the client
-// needs to show page numbers.
 func NewKeyListResponse(items []KeyListItemResponse, total int, params requests.KeyListParams) KeyListResponse {
 	return KeyListResponse{
 		Items:      items,

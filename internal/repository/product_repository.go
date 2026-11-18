@@ -24,18 +24,10 @@ func NewProductRepository(db DBTX) *ProductRepository {
 	return &ProductRepository{db: db}
 }
 
-// hasBuyableOffer limits a query on "products p" to products that can be bought
-// right now, i.e. products with an active offer that has an available key. It
-// keeps exactly the products that cheapestBuyableOffer keeps, so the filter
-// counts add up to the store list's total.
+// Keeps exactly the products cheapestBuyableOffer keeps, so the filter counts add up to the store list's total.
 var hasBuyableOffer = sq.Expr("EXISTS (SELECT 1 FROM offers o WHERE o.product_id = p.id AND o.is_active AND " + availableKeyExists + ")")
 
-// GetFilters returns every value the store can be filtered by, with the number
-// of products that have it, plus the highest buyable offer price.
-// Only products that can be bought right now are counted (the same ones the store
-// list shows), so no filter leads to an empty page.
-// The rows are read straight into the response types, since this query only exists
-// for GET /api/v1/products/filters.
+// Only buyable products are counted (the ones the store list shows), so no filter leads to an empty page.
 func (r *ProductRepository) GetFilters(ctx context.Context) (responses.ProductFiltersResponse, error) {
 	types, err := r.countProductsBy(ctx, "p.type")
 	if err != nil {
@@ -71,7 +63,6 @@ func (r *ProductRepository) GetFilters(ctx context.Context) (responses.ProductFi
 	}, nil
 }
 
-// countProductsBy groups products by column and counts each value, most common first.
 // column goes into the SQL as-is, so it must always be a constant from this file, never user input.
 func (r *ProductRepository) countProductsBy(ctx context.Context, column string) ([]responses.FilterOption, error) {
 	query, args, err := psql.
@@ -90,14 +81,11 @@ func (r *ProductRepository) countProductsBy(ctx context.Context, column string) 
 		return nil, err
 	}
 
-	// CollectRows reads every row and closes rows. RowToStructByPos fills the
-	// struct fields in column order: column -> Value, COUNT(*) -> Count.
-	// The json tags don't matter here, only the field order.
+	// RowToStructByPos fills by column order (column -> Value, COUNT(*) -> Count); json tags don't matter.
 	return pgx.CollectRows(rows, pgx.RowToStructByPos[responses.FilterOption])
 }
 
-// countProductsByGenre counts products per genre, most common first.
-// The columns are selected in GenreFilterOption's field order: slug -> Value, name -> Label.
+// Columns are selected in GenreFilterOption's field order: slug -> Value, name -> Label.
 func (r *ProductRepository) countProductsByGenre(ctx context.Context) ([]responses.GenreFilterOption, error) {
 	query, args, err := psql.
 		Select("g.slug", "g.name", "COUNT(*)").
@@ -120,8 +108,6 @@ func (r *ProductRepository) countProductsByGenre(ctx context.Context) ([]respons
 	return pgx.CollectRows(rows, pgx.RowToStructByPos[responses.GenreFilterOption])
 }
 
-// maxBuyablePrice returns the highest price among offers that can be bought
-// right now (active, with an available key), or 0 if there are none.
 func (r *ProductRepository) maxBuyablePrice(ctx context.Context) (int, error) {
 	query, args, err := psql.
 		Select("COALESCE(MAX(o.price_cents), 0)"). // MAX of no rows is NULL
@@ -141,15 +127,9 @@ func (r *ProductRepository) maxBuyablePrice(ctx context.Context) (int, error) {
 	return maxCents, nil
 }
 
-// cheapestBuyableOffer joins every product to its single cheapest offer that can
-// be bought right now (active, with an available key) as "co". That is the same
-// price as the first offer on the product page, so the store list, the search
-// dropdown and the home page all show the price a buyer actually gets.
-// Only the offer's own price is needed; the discount compares it with p.base_price_cents.
-// LATERAL lets the subquery use p.id from the outer query, so it runs once per product.
-// It's an inner JOIN, so products that can't be bought right now (no active
-// offer, or every key sold or reserved) drop out of the list.
-// o.id breaks ties between equal prices, so the same offer is picked every time.
+// The cheapest buyable offer is the first offer on the product page, so every list shows the price
+// a buyer actually gets. It's an inner join, so products without a buyable offer (inactive, or all
+// keys sold or reserved) drop out. o.id breaks price ties, so the same offer is picked every time.
 const cheapestBuyableOffer = `JOIN LATERAL (
 	SELECT o.price_cents, o.currency
 	FROM offers o
@@ -158,13 +138,10 @@ const cheapestBuyableOffer = `JOIN LATERAL (
 	LIMIT 1
 ) co ON true`
 
-// searchSimilarityThreshold is how close (0 to 1) the search text must be to a
-// word sequence in the title to count as a match. 0.5 lets "witcer" find
-// "The Witcher 3" (0.57) without also matching "Monster Hunter" (0.43).
+// 0.5 lets "witcer" find "The Witcher 3" (0.57) without also matching "Monster Hunter" (0.43).
 const searchSimilarityThreshold = 0.5
 
-// productSortOrders maps each sort option to its ORDER BY clause. The clauses are
-// fixed strings, so user input never ends up in the SQL.
+// Fixed ORDER BY strings, so user input never ends up in the SQL.
 var productSortOrders = map[requests.ProductSort]string{
 	requests.ProductSortPopular:   "p.sold_count DESC",
 	requests.ProductSortPriceAsc:  "co.price_cents ASC",
@@ -175,8 +152,7 @@ var productSortOrders = map[requests.ProductSort]string{
 	requests.ProductSortNameDesc:  "p.title DESC",
 }
 
-// productListRow is one row of the List query. Its fields are in the same order
-// as the selected columns, so pgx.RowToStructByPos can fill it.
+// Fields follow the order of the selected columns (RowToStructByPos).
 type productListRow struct {
 	ID             uuid.UUID
 	Slug           string
@@ -185,13 +161,11 @@ type productListRow struct {
 	Type           models.ProductType
 	Platform       models.Platform
 	Region         models.Region
-	PriceCents     int // the cheapest buyable offer
-	BasePriceCents int // the product's official price, for the discount
+	PriceCents     int
+	BasePriceCents int
 	Currency       string
 }
 
-// toResponse turns the flat row into a product card with a nested price,
-// discounted against the product's base price.
 func (row productListRow) toResponse() responses.ProductListItemResponse {
 	return responses.ProductListItemResponse{
 		ID:             row.ID,
@@ -206,8 +180,6 @@ func (row productListRow) toResponse() responses.ProductListItemResponse {
 	}
 }
 
-// List returns one page of the store's products matching params as product
-// cards, each priced by its cheapest buyable offer, plus the total number of matches.
 func (r *ProductRepository) List(ctx context.Context, params requests.ProductListParams) ([]responses.ProductListItemResponse, int, error) {
 	where := productListWhere(params)
 
@@ -228,9 +200,8 @@ func (r *ProductRepository) List(ctx context.Context, params requests.ProductLis
 		Limit(uint64(params.Limit)).
 		Offset(uint64(params.Offset()))
 
-	// Equal values (e.g. two products at the same price) would come back in random
-	// order, so a product could appear on two pages. title and id make the order unique.
-	// name_desc already orders by title, so only id is needed as a tie-breaker.
+	// title and id make the order unique, so no product appears on two pages;
+	// name_desc already orders by title, so it only needs id.
 	if params.Sort == requests.ProductSortNameDesc {
 		query = query.OrderBy("p.id")
 	} else {
@@ -261,9 +232,7 @@ func (r *ProductRepository) List(ctx context.Context, params requests.ProductLis
 	return items, total, nil
 }
 
-// countList counts every product matching where, ignoring paging.
-// It uses the same cheapestBuyableOffer join as List and Suggest, so the price
-// filters work the same and the total always matches the listed products.
+// Uses the same cheapestBuyableOffer join as List, so the total always matches the listed products.
 func (r *ProductRepository) countList(ctx context.Context, where sq.And) (int, error) {
 	query, args, err := psql.
 		Select("COUNT(*)").
@@ -283,8 +252,6 @@ func (r *ProductRepository) countList(ctx context.Context, where sq.And) (int, e
 	return total, nil
 }
 
-// productListWhere turns params into WHERE conditions, all joined with AND.
-// Values always go in as ? placeholders, never into the SQL text.
 func productListWhere(params requests.ProductListParams) sq.And {
 	where := sq.And{}
 
@@ -292,7 +259,6 @@ func productListWhere(params requests.ProductListParams) sq.And {
 		where = append(where, titleMatches(params.Search))
 	}
 
-	// Squirrel turns sq.Eq with a slice into "IN (...)": any of the values matches.
 	if len(params.Types) > 0 {
 		where = append(where, sq.Eq{"p.type": params.Types})
 	}
@@ -323,19 +289,15 @@ func productListWhere(params requests.ProductListParams) sq.And {
 	return where
 }
 
-// likeEscaper puts a backslash before the characters that are special in LIKE
-// patterns, so a search for "100%" looks for a real percent sign.
+// Escapes LIKE wildcards, so a search for "100%" looks for a real percent sign.
 var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 func escapeLike(s string) string {
 	return likeEscaper.Replace(s)
 }
 
-// titleMatches is the store's search condition on "products p". List and Suggest
-// both use it, so the dropdown finds the same products as the store page.
-// ILIKE finds the text anywhere in the title ("elden" -> "Elden Ring").
-// word_similarity (pg_trgm) compares letter triplets, so typos still match
-// ("eldn ring" -> "Elden Ring", "witcer" -> "The Witcher 3").
+// Shared by List and Suggest, so the dropdown finds the same products as the store page.
+// word_similarity (pg_trgm) lets typos match ("eldn ring" -> "Elden Ring").
 func titleMatches(search string) sq.Or {
 	return sq.Or{
 		sq.ILike{"p.title": "%" + escapeLike(search) + "%"},
@@ -343,23 +305,19 @@ func titleMatches(search string) sq.Or {
 	}
 }
 
-// maxSuggestions is how many products the search dropdown shows.
 const maxSuggestions = 6
 
-// productSuggestionRow is one row of the Suggest query, in the same order as
-// the selected columns, so pgx.RowToStructByPos can fill it.
+// Fields follow the order of the selected columns (RowToStructByPos).
 type productSuggestionRow struct {
 	Slug           string
 	Title          string
 	ImageURL       string
 	Type           models.ProductType
-	PriceCents     int // the cheapest buyable offer
-	BasePriceCents int // the product's official price, for the discount
+	PriceCents     int
+	BasePriceCents int
 	Currency       string
 }
 
-// toResponse turns the flat row into a dropdown row with a nested price,
-// discounted against the product's base price.
 func (row productSuggestionRow) toResponse() responses.ProductSuggestionResponse {
 	return responses.ProductSuggestionResponse{
 		Slug:           row.Slug,
@@ -371,11 +329,8 @@ func (row productSuggestionRow) toResponse() responses.ProductSuggestionResponse
 	}
 }
 
-// Suggest returns the best maxSuggestions products for the search dropdown,
-// plus the total number of matches. It matches and prices products exactly like
-// List, so the total equals the store page's total for the same search.
-// Unlike List it orders by how well the title matches, because with only a few
-// rows the product the user is typing has to come first.
+// Matches and prices like List, so the total equals the store page's total. Unlike List it orders
+// by match quality, because with only a few rows the product being typed has to come first.
 func (r *ProductRepository) Suggest(ctx context.Context, search string) (responses.ProductSuggestionsResponse, error) {
 	where := sq.And{titleMatches(search)}
 
@@ -395,9 +350,8 @@ func (r *ProductRepository) Suggest(ctx context.Context, search string) (respons
 		From("products p").
 		JoinClause(cheapestBuyableOffer).
 		Where(where).
-		// Titles that start with the search text come first ("eld" -> "Elden Ring";
-		// true sorts after false, hence DESC), then the closest fuzzy matches, then
-		// the best sellers. title and id make the order unique.
+		// Prefix matches first (true sorts after false, hence DESC), then the closest fuzzy matches,
+		// then best sellers; title and id make the order unique.
 		OrderByClause("p.title ILIKE ? DESC", escapeLike(search)+"%").
 		OrderByClause("word_similarity(?, p.title) DESC", search).
 		OrderBy("p.sold_count DESC", "p.title", "p.id").
@@ -425,10 +379,7 @@ func (r *ProductRepository) Suggest(ctx context.Context, search string) (respons
 	return responses.NewProductSuggestionsResponse(items, total), nil
 }
 
-// GetBySlug returns the product page for slug: the product, its genres and every
-// offer that can be bought right now, cheapest first. It runs three small queries
-// instead of one big join, so each part stays easy to read.
-// It returns models.ErrNotFound if no product has this slug.
+// Three small queries instead of one big join, so each part stays easy to read.
 func (r *ProductRepository) GetBySlug(ctx context.Context, slug string) (responses.ProductDetailResponse, error) {
 	product, err := r.getDetailRow(ctx, slug)
 	if err != nil {
@@ -448,8 +399,7 @@ func (r *ProductRepository) GetBySlug(ctx context.Context, slug string) (respons
 	return product.toResponse(genres, offers), nil
 }
 
-// productDetailRow is the product part of the product page, in the same order
-// as the columns selected by getDetailRow.
+// Fields follow the columns selected by getDetailRow.
 type productDetailRow struct {
 	ID             uuid.UUID
 	Slug           string
@@ -465,7 +415,6 @@ type productDetailRow struct {
 	BasePriceCents int
 }
 
-// getDetailRow selects the product with this slug, or returns models.ErrNotFound.
 func (r *ProductRepository) getDetailRow(ctx context.Context, slug string) (productDetailRow, error) {
 	query, args, err := psql.
 		Select(
@@ -484,7 +433,6 @@ func (r *ProductRepository) getDetailRow(ctx context.Context, slug string) (prod
 		return productDetailRow{}, fmt.Errorf("select product: %w", err)
 	}
 
-	// CollectExactlyOneRow returns pgx.ErrNoRows when nothing matched.
 	product, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByPos[productDetailRow])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -496,8 +444,7 @@ func (r *ProductRepository) getDetailRow(ctx context.Context, slug string) (prod
 	return product, nil
 }
 
-// listGenres returns the product's genres sorted by name. The columns are
-// selected in GenreResponse's field order: slug -> Slug, name -> Name.
+// Columns are selected in GenreResponse's field order.
 func (r *ProductRepository) listGenres(ctx context.Context, productID uuid.UUID) ([]responses.GenreResponse, error) {
 	query, args, err := psql.
 		Select("g.slug", "g.name").
@@ -519,8 +466,7 @@ func (r *ProductRepository) listGenres(ctx context.Context, productID uuid.UUID)
 	return pgx.CollectRows(rows, pgx.RowToStructByPos[responses.GenreResponse])
 }
 
-// offerRow is one row of the listBuyableOffers query: an offer with its seller,
-// in the same order as the selected columns.
+// Fields follow the order of the selected columns (RowToStructByPos).
 type offerRow struct {
 	ID            uuid.UUID
 	PriceCents    int
@@ -528,12 +474,10 @@ type offerRow struct {
 	SellerID      uuid.UUID
 	SellerName    string
 	SellerLogoURL *string
-	SellerRating  float64 // NUMERIC(4,2) in the database
+	SellerRating  float64
 }
 
-// listBuyableOffers returns the product's active offers that still have an
-// available key (see availableKeyCondition), cheapest first. Equal prices go to the better rated seller first, and
-// o.id makes the order the same on every request.
+// Cheapest first; equal prices go to the better rated seller, and o.id keeps the order stable.
 func (r *ProductRepository) listBuyableOffers(ctx context.Context, productID uuid.UUID) ([]offerRow, error) {
 	query, args, err := psql.
 		Select(
@@ -558,10 +502,8 @@ func (r *ProductRepository) listBuyableOffers(ctx context.Context, productID uui
 	return pgx.CollectRows(rows, pgx.RowToStructByPos[offerRow])
 }
 
-// toResponse builds the product page from the product row, its genres and its
-// offers. Each offer's discount is measured against the product's base price.
 func (row productDetailRow) toResponse(genres []responses.GenreResponse, offers []offerRow) responses.ProductDetailResponse {
-	// make(..., 0, n) so a product with nothing to sell has [] offers, not null.
+	// make(..., 0, n) so nothing to sell is [] offers, not null.
 	offerResponses := make([]responses.OfferResponse, 0, len(offers))
 	for _, offer := range offers {
 		offerResponses = append(offerResponses, offer.toResponse(row.BasePriceCents))
@@ -578,14 +520,13 @@ func (row productDetailRow) toResponse(genres []responses.GenreResponse, offers 
 		Region:         row.Region,
 		Developer:      row.Developer,
 		Publisher:      row.Publisher,
-		ReleaseDate:    row.ReleaseDate.Format(time.DateOnly), // "2022-02-25"
+		ReleaseDate:    row.ReleaseDate.Format(time.DateOnly),
 		BasePriceCents: row.BasePriceCents,
 		Genres:         genres,
 		Offers:         offerResponses,
 	}
 }
 
-// toResponse turns the flat offer row into an offer with a nested price and seller.
 func (row offerRow) toResponse(basePriceCents int) responses.OfferResponse {
 	return responses.OfferResponse{
 		ID:    row.ID,
@@ -599,9 +540,6 @@ func (row offerRow) toResponse(basePriceCents int) responses.OfferResponse {
 	}
 }
 
-// ListPopular returns up to limit products of the given types that can be
-// bought right now, best sellers first, as product cards priced by their
-// cheapest buyable offer. The home page uses it for its blocks.
 func (r *ProductRepository) ListPopular(ctx context.Context, types []models.ProductType, limit int) ([]responses.ProductListItemResponse, error) {
 	// Equal sold counts would come back in random order; title and id make it stable.
 	query, args, err := psql.

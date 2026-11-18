@@ -12,8 +12,6 @@ import (
 	"eneba-backend/internal/models"
 )
 
-// APIError is an error that already knows its HTTP status and the
-// message the client should see.
 type APIError struct {
 	Status  int
 	Code    string
@@ -25,18 +23,15 @@ func (e *APIError) Error() string {
 	return e.Message
 }
 
-// BadRequest builds a 400 error with the given message.
 func BadRequest(message string) *APIError {
 	return &APIError{Status: http.StatusBadRequest, Code: "bad_request", Message: message}
 }
 
-// ValidationFailed builds a 400 error listing the problem with each field.
 func ValidationFailed(details map[string]string) *APIError {
 	return &APIError{Status: http.StatusBadRequest, Code: "validation_failed", Message: "request validation failed", Details: details}
 }
 
-// InsufficientStock builds a 409 error for asking for more keys than an offer has left.
-// available is how many keys can still be bought, so the client can lower the quantity.
+// available lets the client lower the quantity.
 func InsufficientStock(available int) *APIError {
 	return &APIError{
 		Status:  http.StatusConflict,
@@ -46,21 +41,17 @@ func InsufficientStock(available int) *APIError {
 	}
 }
 
-// InsufficientStockForOffer is InsufficientStock for one offer of a cart, used
-// at checkout, where the cart can hold several offers.
 func InsufficientStockForOffer(offerID string, available int) *APIError {
 	err := InsufficientStock(available)
 	err.Details["offerId"] = offerID
 	return err
 }
 
-// CartEmpty builds a 400 error for a checkout without a cart or without items.
 func CartEmpty() *APIError {
 	return &APIError{Status: http.StatusBadRequest, Code: "cart_empty", Message: "the cart is empty"}
 }
 
-// OfferUnavailable builds a 409 error for a cart offer that can no longer be
-// bought (it was deactivated). offerID tells the client which item to remove.
+// offerID tells the client which cart item to remove.
 func OfferUnavailable(offerID string) *APIError {
 	return &APIError{
 		Status:  http.StatusConflict,
@@ -70,13 +61,11 @@ func OfferUnavailable(offerID string) *APIError {
 	}
 }
 
-// PaymentProviderError builds a 502 error for when Stripe can't be reached or refuses a request.
 func PaymentProviderError() *APIError {
 	return &APIError{Status: http.StatusBadGateway, Code: "payment_provider_error", Message: "the payment provider is unavailable, please try again"}
 }
 
-// OrderNotPaid builds a 409 error for asking for the keys of an order that
-// isn't paid (yet). status tells the client whether it is pending or cancelled.
+// status tells the client whether the order is pending or cancelled.
 func OrderNotPaid(status string) *APIError {
 	return &APIError{
 		Status:  http.StatusConflict,
@@ -86,12 +75,10 @@ func OrderNotPaid(status string) *APIError {
 	}
 }
 
-// InvalidSignature builds a 400 error for a webhook request without a valid signature.
 func InvalidSignature() *APIError {
 	return &APIError{Status: http.StatusBadRequest, Code: "invalid_signature", Message: "invalid webhook signature"}
 }
 
-// errorResponse is the JSON shape of every error the API returns:
 // {"error": {"code": "not_found", "message": "resource not found"}}
 type errorResponse struct {
 	Error errorDetail `json:"error"`
@@ -103,9 +90,7 @@ type errorDetail struct {
 	Details map[string]string `json:"details,omitempty"`
 }
 
-// Error writes err as a JSON error response with the right status code.
-// Unknown errors become a generic 500 and are logged with full detail,
-// so internal messages (SQL errors etc.) never leak to the client.
+// Unknown errors become a generic 500 and are logged in full, so SQL errors never leak to the client.
 func Error(w http.ResponseWriter, r *http.Request, err error) {
 	apiErr := toAPIError(err)
 
@@ -123,8 +108,6 @@ func Error(w http.ResponseWriter, r *http.Request, err error) {
 	})
 }
 
-// toAPIError maps domain errors to HTTP errors.
-// errors.Is also matches wrapped errors, e.g. fmt.Errorf("get user: %w", models.ErrNotFound).
 func toAPIError(err error) *APIError {
 	var apiErr *APIError
 	if errors.As(err, &apiErr) {

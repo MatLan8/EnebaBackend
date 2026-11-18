@@ -6,9 +6,8 @@ import (
 	"github.com/go-chi/cors"
 )
 
-// CORS allows the React frontend (on another domain) to call the API.
-// AllowCredentials is required so the browser sends the refresh token cookie;
-// with credentials the allowed origins must be listed explicitly, never "*".
+// AllowCredentials is needed for the refresh token cookie, and with credentials the origins
+// must be listed explicitly, never "*".
 func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
 	return cors.Handler(cors.Options{
 		AllowedOrigins:   allowedOrigins,

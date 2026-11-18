@@ -34,7 +34,6 @@ func TestNewPriceResponse(t *testing.T) {
 	}
 }
 
-// checkOptionalInt compares two nullable ints, where nil means null in the JSON.
 func checkOptionalInt(t *testing.T, field string, got, want *int) {
 	t.Helper()
 

@@ -19,10 +19,7 @@ func NewKeyHandler(keys *repository.KeyRepository) *KeyHandler {
 	return &KeyHandler{keys: keys}
 }
 
-// List handles GET /api/v1/keys and returns one page of the signed-in user's
-// key library: every key from their paid orders, newest purchase first.
-// ?q= searches product titles and order public IDs. The codes are not included;
-// the frontend gets them from GET /api/v1/orders/{id}/keys.
+// Codes are not included; the frontend gets them from GET /api/v1/orders/{id}/keys.
 func (h *KeyHandler) List(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

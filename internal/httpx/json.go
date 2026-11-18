@@ -10,10 +10,9 @@ import (
 	"strings"
 )
 
-// maxBodyBytes caps request bodies at 1 MB so a client can't exhaust memory.
+// 1 MB, so a client can't exhaust memory.
 const maxBodyBytes = 1 << 20
 
-// WriteJSON serializes v as JSON and writes it with the given status code.
 func WriteJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -27,15 +26,11 @@ func WriteJSON(w http.ResponseWriter, status int, v any) {
 	}
 }
 
-// NoContent writes an empty 204 response.
 func NoContent(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// DecodeJSON reads the request body into dst.
-// It rejects bodies that are too large, malformed, contain unknown fields
-// or contain more than one JSON value. Every failure is returned as a
-// 400 *APIError with a message that is safe to show to the client.
+// Every failure is a 400 *APIError with a message that is safe to show the client.
 func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 
@@ -46,8 +41,7 @@ func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 		return BadRequest(describeDecodeError(err))
 	}
 
-	// A second Decode must hit the end of the body; anything else means
-	// the client sent extra data, e.g. {"a":1}{"b":2}.
+	// A second value in the body, e.g. {"a":1}{"b":2}, is rejected.
 	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		return BadRequest("request body must contain a single JSON object")
 	}
@@ -55,7 +49,6 @@ func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 	return nil
 }
 
-// describeDecodeError turns encoding/json errors into readable messages.
 func describeDecodeError(err error) string {
 	var syntaxErr *json.SyntaxError
 	var typeErr *json.UnmarshalTypeError

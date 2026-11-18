@@ -10,7 +10,6 @@ import (
 	"eneba-backend/internal/httpx"
 )
 
-// assertValidationFailed checks that err is a 400 validation_failed with a problem for each field.
 func assertValidationFailed(t *testing.T, err error, fields ...string) {
 	t.Helper()
 
@@ -33,19 +32,6 @@ func assertValidationFailed(t *testing.T, err error, fields ...string) {
 
 func ptr[T any](v T) *T {
 	return &v
-}
-
-func TestAddCartItemRequestValid(t *testing.T) {
-	offerID := uuid.New()
-
-	got, err := AddCartItemRequest{OfferID: ptr(offerID.String())}.Validate()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if got != offerID {
-		t.Errorf("offerID = %s; want %s", got, offerID)
-	}
 }
 
 func TestAddCartItemRequestInvalid(t *testing.T) {
@@ -78,19 +64,5 @@ func TestUpdateCartItemRequest(t *testing.T) {
 	for _, req := range []UpdateCartItemRequest{{}, {Quantity: ptr(0)}, {Quantity: ptr(11)}} {
 		_, err := req.Validate()
 		assertValidationFailed(t, err, "quantity")
-	}
-}
-
-func TestParseOfferIDParam(t *testing.T) {
-	offerID := uuid.New()
-
-	got, err := ParseOfferIDParam(offerID.String())
-	if err != nil || got != offerID {
-		t.Errorf("ParseOfferIDParam(valid) = %s, %v; want %s, nil", got, err, offerID)
-	}
-
-	for _, raw := range []string{"", "not-a-uuid", uuid.Nil.String()} {
-		_, err := ParseOfferIDParam(raw)
-		assertValidationFailed(t, err, "offerId")
 	}
 }

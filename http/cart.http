@@ -1,10 +1,6 @@
-# The cart belongs to the browser, not to a user, so no sign-in is needed.
-# The first "Add item" creates a cart and the API sets an HttpOnly cart_token cookie.
-# GoLand's HTTP client keeps that cookie and sends it with every later request,
-# so they all use the same cart. To start over with a new cart, clear the cookies
-# (the http-client.cookies file in .idea/httpRequests) or run "Empty cart".
-# offerId is PixelVault's Elden Ring offer (6 keys). Offer ids change after seed -reset;
-# take a new one from the offers of GET /api/v1/products/{slug}.
+# The cart lives in the HttpOnly cart_token cookie, which GoLand keeps between requests.
+# To start over, clear the cookies (.idea/httpRequests/http-client.cookies) or run "Empty cart".
+# offerId is PixelVault's Elden Ring offer; ids change after seed -reset (take one from GET /api/v1/products/{slug}).
 @offerId = f26f9e4f-2b98-405d-9b59-c9044d33566c
 
 ### Get cart

@@ -1,5 +1,4 @@
--- One cart row per user per offer. Quantity is capped at 10, the same limit
--- the cart API will enforce.
+-- Quantity is capped at 10, the same limit the cart API enforces.
 CREATE TABLE cart_items (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id    UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,

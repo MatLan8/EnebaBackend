@@ -15,15 +15,12 @@ import (
 	"eneba-backend/internal/models"
 )
 
-// AccessClaims is the payload of an access token.
-// Embedding jwt.RegisteredClaims adds the standard fields
-// (iss, sub, aud, exp, iat, jti); Name is our own custom claim.
+// Name is our own custom claim on top of the standard ones.
 type AccessClaims struct {
 	Name string `json:"name"`
 	jwt.RegisteredClaims
 }
 
-// UserID returns the user ID stored in the "sub" claim.
 func (c *AccessClaims) UserID() (uuid.UUID, error) {
 	id, err := uuid.Parse(c.Subject)
 	if err != nil {
@@ -32,15 +29,13 @@ func (c *AccessClaims) UserID() (uuid.UUID, error) {
 	return id, nil
 }
 
-// IssuedRefreshToken is a freshly generated refresh token.
-// Raw goes into the user's cookie, Hash goes into the database.
+// Raw goes into the user's cookie, Hash into the database.
 type IssuedRefreshToken struct {
 	Raw       string
 	Hash      string
 	ExpiresAt time.Time
 }
 
-// TokenService creates and validates access tokens and generates refresh tokens.
 type TokenService struct {
 	secret     []byte
 	issuer     string
@@ -61,7 +56,6 @@ func NewTokenService(cfg *config.Config) *TokenService {
 	}
 }
 
-// NewAccessToken signs a short-lived JWT for the user and returns it with its expiry time.
 func (s *TokenService) NewAccessToken(user *models.User) (string, time.Time, error) {
 	now := s.now()
 	expiresAt := now.Add(s.accessTTL)
@@ -78,7 +72,6 @@ func (s *TokenService) NewAccessToken(user *models.User) (string, time.Time, err
 		},
 	}
 
-	// The header ({"alg":"HS256","typ":"JWT"}) is added by the library.
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	signed, err := token.SignedString(s.secret)
@@ -88,8 +81,6 @@ func (s *TokenService) NewAccessToken(user *models.User) (string, time.Time, err
 	return signed, expiresAt, nil
 }
 
-// ParseAccessToken verifies the signature, algorithm, issuer, audience and
-// expiry of an access token and returns its claims.
 // Any problem is reported as models.ErrInvalidToken.
 func (s *TokenService) ParseAccessToken(tokenString string) (*AccessClaims, error) {
 	claims := &AccessClaims{}
@@ -113,10 +104,8 @@ func (s *TokenService) ParseAccessToken(tokenString string) (*AccessClaims, erro
 	return claims, nil
 }
 
-// NewRefreshToken generates a random, unguessable refresh token.
 func (s *TokenService) NewRefreshToken() IssuedRefreshToken {
-	// rand.Text returns 26 random base32 characters (about 130 bits of entropy)
-	// from the operating system's secure random generator.
+	// About 130 bits of entropy from the OS secure random generator.
 	raw := rand.Text()
 
 	return IssuedRefreshToken{
@@ -126,28 +115,22 @@ func (s *TokenService) NewRefreshToken() IssuedRefreshToken {
 	}
 }
 
-// HashRefreshToken returns the SHA-256 hex digest of a raw refresh token.
-// The same input always gives the same hash, so it can be looked up in the database.
 func HashRefreshToken(raw string) string {
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:])
 }
 
-// IssuedTokens is everything a client gets when it signs in.
 type IssuedTokens struct {
 	AccessToken          string
 	AccessTokenExpiresAt time.Time
 	RefreshToken         IssuedRefreshToken
 }
 
-// RefreshTokenCreator is the one repository method IssueTokens needs.
-// *repository.RefreshTokenRepository satisfies it, with or without a transaction.
+// Satisfied by *repository.RefreshTokenRepository, with or without a transaction.
 type RefreshTokenCreator interface {
 	Create(ctx context.Context, userID uuid.UUID, tokenHash string, expiresAt time.Time) error
 }
 
-// IssueTokens creates an access token and a refresh token for the user and
-// stores the refresh token's hash. Used by register, login and refresh.
 func (s *TokenService) IssueTokens(ctx context.Context, store RefreshTokenCreator, user *models.User) (*IssuedTokens, error) {
 	accessToken, accessExpiresAt, err := s.NewAccessToken(user)
 	if err != nil {

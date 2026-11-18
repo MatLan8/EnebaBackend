@@ -6,7 +6,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// Seller mirrors a row in the sellers table.
 type Seller struct {
 	ID        uuid.UUID `json:"id"`
 	Name      string    `json:"name"`

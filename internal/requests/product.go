@@ -16,7 +16,6 @@ const (
 	maxProductPageLimit     = 60
 )
 
-// ProductSort is how the store's product list is ordered.
 type ProductSort string
 
 const (
@@ -29,7 +28,6 @@ const (
 	ProductSortNameDesc  ProductSort = "name_desc"  // title Z to A
 )
 
-// ProductSorts lists every valid ProductSort.
 var ProductSorts = []ProductSort{
 	ProductSortPopular,
 	ProductSortPriceAsc,
@@ -40,31 +38,25 @@ var ProductSorts = []ProductSort{
 	ProductSortNameDesc,
 }
 
-// ProductListParams is what the store's product list is filtered, sorted and
-// paged by, read from the query string of GET /api/v1/products.
 // Empty slices and nil pointers mean "no filter".
 type ProductListParams struct {
-	Search        string // matched against the title, typo-tolerant
+	Search        string // typo-tolerant
 	Types         []models.ProductType
 	Platforms     []models.Platform
 	Regions       []models.Region
-	Genres        []string // genre slugs
-	MinPriceCents *int     // compared with the cheapest buyable offer
+	Genres        []string
+	MinPriceCents *int // compared with the cheapest buyable offer
 	MaxPriceCents *int
 	Sort          ProductSort
-	Page          int // starts at 1
-	Limit         int // items per page
+	Page          int
+	Limit         int
 }
 
-// Offset is the number of rows to skip to reach Page.
 func (p ProductListParams) Offset() int {
 	return (p.Page - 1) * p.Limit
 }
 
-// ParseProductListQuery reads the query string of GET /api/v1/products.
-// Every parameter is optional. type, platform, region and genre can be
-// repeated, e.g. ?platform=steam&platform=psn. Every problem found is
-// returned at once as a 400 validation error, keyed by parameter name.
+// type, platform, region and genre can be repeated, e.g. ?platform=steam&platform=psn.
 func ParseProductListQuery(query url.Values) (ProductListParams, error) {
 	details := map[string]string{}
 
@@ -139,10 +131,7 @@ func ParseProductListQuery(query url.Values) (ProductListParams, error) {
 	return params, nil
 }
 
-// parseEnumValues converts raw strings into one of the "enum" types, e.g. Platform.
 // ok is false if any value isn't in allowed.
-// [T ~string] makes it generic: T can be any type whose underlying type is string,
-// so the same function works for ProductType, Platform and Region.
 func parseEnumValues[T ~string](raw []string, allowed []T) (values []T, ok bool) {
 	for _, s := range raw {
 		value := T(s)
@@ -154,7 +143,6 @@ func parseEnumValues[T ~string](raw []string, allowed []T) (values []T, ok bool)
 	return values, true
 }
 
-// mustBeOneOf builds a message like "must be one of: steam, psn".
 func mustBeOneOf[T ~string](allowed []T) string {
 	names := make([]string, len(allowed))
 	for i, a := range allowed {
