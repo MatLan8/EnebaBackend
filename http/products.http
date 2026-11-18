@@ -1,5 +1,6 @@
 ### Filters
-# Public, no sign-in needed. Counts only include products with an active offer.
+# Public, no sign-in needed. Counts only include products that can be bought right now
+# (an active offer with an available key), the same products the store list shows.
 GET {{baseUrl}}/api/v1/products/filters
 
 ### List products

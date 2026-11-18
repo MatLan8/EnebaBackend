@@ -15,7 +15,7 @@ type ProductSuggestionResponse struct {
 	ImageURL       string        `json:"imageUrl"`
 	IsDLC          bool          `json:"isDlc"`          // shows the DLC badge
 	BasePriceCents int           `json:"basePriceCents"` // official price, shown crossed out
-	Price          PriceResponse `json:"price"`          // the cheapest active offer
+	Price          PriceResponse `json:"price"`          // the cheapest buyable offer
 }
 
 // NewProductSuggestionsResponse wraps the suggestions with the total number of

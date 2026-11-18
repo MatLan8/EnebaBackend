@@ -11,6 +11,10 @@ const availableKeyCondition = "k.sold_at IS NULL AND (k.reserved_until IS NULL O
 // availableKeyCount counts the available keys of offer "o", i.e. its stock.
 const availableKeyCount = "(SELECT COUNT(*) FROM digital_keys k WHERE k.offer_id = o.id AND " + availableKeyCondition + ")"
 
-// hasAvailableKey limits a query on "offers o" to offers with at least one
-// available key. An offer without one can't be bought right now.
-var hasAvailableKey = sq.Expr("EXISTS (SELECT 1 FROM digital_keys k WHERE k.offer_id = o.id AND " + availableKeyCondition + ")")
+// availableKeyExists is true for an offer "o" with at least one available key.
+// An offer without one can't be bought right now.
+const availableKeyExists = "EXISTS (SELECT 1 FROM digital_keys k WHERE k.offer_id = o.id AND " + availableKeyCondition + ")"
+
+// hasAvailableKey limits a squirrel query on "offers o" to offers with at least
+// one available key (availableKeyExists).
+var hasAvailableKey = sq.Expr(availableKeyExists)

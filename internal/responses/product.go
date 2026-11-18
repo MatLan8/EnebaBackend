@@ -8,7 +8,7 @@ import (
 )
 
 // PriceResponse is the price of an offer, e.g. the "From" price on a product
-// card, which comes from the product's cheapest active offer. DiscountPercent is
+// card, which comes from the product's cheapest buyable offer. DiscountPercent is
 // how much cheaper the offer is than the product's official base price, which is
 // sent once next to it as basePriceCents. It is null when the offer isn't cheaper.
 type PriceResponse struct {

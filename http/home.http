@@ -1,0 +1,8 @@
+# Home page blocks. Public, no sign-in needed.
+# Each block lists up to 12 products that can be bought right now (an active
+# offer with an available key), best sellers first, priced by their cheapest
+# buyable offer. Blocks with no such products are left out.
+
+### Home
+# 200 {"blocks": [{"title": "Most popular games", "productTypes": ["game"], "products": [...]}, ...]}
+GET {{baseUrl}}/api/v1/home

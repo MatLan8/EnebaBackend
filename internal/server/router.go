@@ -26,6 +26,7 @@ type Deps struct {
 	Checkout      *handlers.CheckoutHandler
 	Orders        *handlers.OrderHandler
 	Keys          *handlers.KeyHandler
+	Home          *handlers.HomeHandler
 	StripeWebhook *handlers.StripeWebhookHandler
 	Tokens        *services.TokenService // used by the auth middleware
 }
@@ -60,6 +61,9 @@ func NewRouter(d Deps) http.Handler {
 			r.Post("/refresh", d.Auth.Refresh)
 			r.Post("/logout", d.Auth.Logout)
 		})
+
+		// The home page blocks. Public like the store.
+		r.Get("/home", d.Home.Get)
 
 		// Public store routes. chi matches fixed segments like /filters and /suggestions before
 		// URL parameters, so /{slug} never swallows them.

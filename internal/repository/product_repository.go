@@ -24,13 +24,16 @@ func NewProductRepository(db DBTX) *ProductRepository {
 	return &ProductRepository{db: db}
 }
 
-// hasActiveOffer limits a query on "products p" to products that can be bought,
-// i.e. products with at least one active offer.
-var hasActiveOffer = sq.Expr("EXISTS (SELECT 1 FROM offers o WHERE o.product_id = p.id AND o.is_active)")
+// hasBuyableOffer limits a query on "products p" to products that can be bought
+// right now, i.e. products with an active offer that has an available key. It
+// keeps exactly the products that cheapestBuyableOffer keeps, so the filter
+// counts add up to the store list's total.
+var hasBuyableOffer = sq.Expr("EXISTS (SELECT 1 FROM offers o WHERE o.product_id = p.id AND o.is_active AND " + availableKeyExists + ")")
 
 // GetFilters returns every value the store can be filtered by, with the number
-// of products that have it, plus the highest active offer price.
-// Only products with an active offer are counted, so no filter leads to an empty page.
+// of products that have it, plus the highest buyable offer price.
+// Only products that can be bought right now are counted (the same ones the store
+// list shows), so no filter leads to an empty page.
 // The rows are read straight into the response types, since this query only exists
 // for GET /api/v1/products/filters.
 func (r *ProductRepository) GetFilters(ctx context.Context) (responses.ProductFiltersResponse, error) {
@@ -54,7 +57,7 @@ func (r *ProductRepository) GetFilters(ctx context.Context) (responses.ProductFi
 		return responses.ProductFiltersResponse{}, fmt.Errorf("count products by genre: %w", err)
 	}
 
-	maxPriceCents, err := r.maxActivePrice(ctx)
+	maxPriceCents, err := r.maxBuyablePrice(ctx)
 	if err != nil {
 		return responses.ProductFiltersResponse{}, fmt.Errorf("select max price: %w", err)
 	}
@@ -74,7 +77,7 @@ func (r *ProductRepository) countProductsBy(ctx context.Context, column string) 
 	query, args, err := psql.
 		Select(column, "COUNT(*)").
 		From("products p").
-		Where(hasActiveOffer).
+		Where(hasBuyableOffer).
 		GroupBy(column).
 		OrderBy("COUNT(*) DESC", column).
 		ToSql()
@@ -101,7 +104,7 @@ func (r *ProductRepository) countProductsByGenre(ctx context.Context) ([]respons
 		From("genres g").
 		Join("product_genres pg ON pg.genre_id = g.id").
 		Join("products p ON p.id = pg.product_id").
-		Where(hasActiveOffer).
+		Where(hasBuyableOffer).
 		GroupBy("g.slug", "g.name").
 		OrderBy("COUNT(*) DESC", "g.slug").
 		ToSql()
@@ -117,12 +120,14 @@ func (r *ProductRepository) countProductsByGenre(ctx context.Context) ([]respons
 	return pgx.CollectRows(rows, pgx.RowToStructByPos[responses.GenreFilterOption])
 }
 
-// maxActivePrice returns the highest price among active offers, or 0 if there are none.
-func (r *ProductRepository) maxActivePrice(ctx context.Context) (int, error) {
+// maxBuyablePrice returns the highest price among offers that can be bought
+// right now (active, with an available key), or 0 if there are none.
+func (r *ProductRepository) maxBuyablePrice(ctx context.Context) (int, error) {
 	query, args, err := psql.
-		Select("COALESCE(MAX(price_cents), 0)"). // MAX of no rows is NULL
-		From("offers").
-		Where(sq.Eq{"is_active": true}).
+		Select("COALESCE(MAX(o.price_cents), 0)"). // MAX of no rows is NULL
+		From("offers o").
+		Where(sq.Eq{"o.is_active": true}).
+		Where(hasAvailableKey).
 		ToSql()
 	if err != nil {
 		return 0, fmt.Errorf("build query: %w", err)
@@ -136,15 +141,19 @@ func (r *ProductRepository) maxActivePrice(ctx context.Context) (int, error) {
 	return maxCents, nil
 }
 
-// cheapestActiveOffer joins every product to its single cheapest active offer as "co".
+// cheapestBuyableOffer joins every product to its single cheapest offer that can
+// be bought right now (active, with an available key) as "co". That is the same
+// price as the first offer on the product page, so the store list, the search
+// dropdown and the home page all show the price a buyer actually gets.
 // Only the offer's own price is needed; the discount compares it with p.base_price_cents.
 // LATERAL lets the subquery use p.id from the outer query, so it runs once per product.
-// It's an inner JOIN, so products without an active offer drop out of the list.
+// It's an inner JOIN, so products that can't be bought right now (no active
+// offer, or every key sold or reserved) drop out of the list.
 // o.id breaks ties between equal prices, so the same offer is picked every time.
-const cheapestActiveOffer = `JOIN LATERAL (
+const cheapestBuyableOffer = `JOIN LATERAL (
 	SELECT o.price_cents, o.currency
 	FROM offers o
-	WHERE o.product_id = p.id AND o.is_active
+	WHERE o.product_id = p.id AND o.is_active AND ` + availableKeyExists + `
 	ORDER BY o.price_cents, o.id
 	LIMIT 1
 ) co ON true`
@@ -176,7 +185,7 @@ type productListRow struct {
 	Type           models.ProductType
 	Platform       models.Platform
 	Region         models.Region
-	PriceCents     int // the cheapest active offer
+	PriceCents     int // the cheapest buyable offer
 	BasePriceCents int // the product's official price, for the discount
 	Currency       string
 }
@@ -198,7 +207,7 @@ func (row productListRow) toResponse() responses.ProductListItemResponse {
 }
 
 // List returns one page of the store's products matching params as product
-// cards, each priced by its cheapest active offer, plus the total number of matches.
+// cards, each priced by its cheapest buyable offer, plus the total number of matches.
 func (r *ProductRepository) List(ctx context.Context, params requests.ProductListParams) ([]responses.ProductListItemResponse, int, error) {
 	where := productListWhere(params)
 
@@ -213,7 +222,7 @@ func (r *ProductRepository) List(ctx context.Context, params requests.ProductLis
 			"co.price_cents", "p.base_price_cents", "co.currency",
 		).
 		From("products p").
-		JoinClause(cheapestActiveOffer).
+		JoinClause(cheapestBuyableOffer).
 		Where(where).
 		OrderBy(productSortOrders[params.Sort]).
 		Limit(uint64(params.Limit)).
@@ -253,12 +262,13 @@ func (r *ProductRepository) List(ctx context.Context, params requests.ProductLis
 }
 
 // countList counts every product matching where, ignoring paging.
-// It joins the cheapest offer too, so the price filters work the same as in List.
+// It uses the same cheapestBuyableOffer join as List and Suggest, so the price
+// filters work the same and the total always matches the listed products.
 func (r *ProductRepository) countList(ctx context.Context, where sq.And) (int, error) {
 	query, args, err := psql.
 		Select("COUNT(*)").
 		From("products p").
-		JoinClause(cheapestActiveOffer).
+		JoinClause(cheapestBuyableOffer).
 		Where(where).
 		ToSql()
 	if err != nil {
@@ -343,7 +353,7 @@ type productSuggestionRow struct {
 	Title          string
 	ImageURL       string
 	Type           models.ProductType
-	PriceCents     int // the cheapest active offer
+	PriceCents     int // the cheapest buyable offer
 	BasePriceCents int // the product's official price, for the discount
 	Currency       string
 }
@@ -383,7 +393,7 @@ func (r *ProductRepository) Suggest(ctx context.Context, search string) (respons
 			"co.price_cents", "p.base_price_cents", "co.currency",
 		).
 		From("products p").
-		JoinClause(cheapestActiveOffer).
+		JoinClause(cheapestBuyableOffer).
 		Where(where).
 		// Titles that start with the search text come first ("eld" -> "Elden Ring";
 		// true sorts after false, hence DESC), then the closest fuzzy matches, then
@@ -587,4 +597,43 @@ func (row offerRow) toResponse(basePriceCents int) responses.OfferResponse {
 			Rating:  row.SellerRating,
 		},
 	}
+}
+
+// ListPopular returns up to limit products of the given types that can be
+// bought right now, best sellers first, as product cards priced by their
+// cheapest buyable offer. The home page uses it for its blocks.
+func (r *ProductRepository) ListPopular(ctx context.Context, types []models.ProductType, limit int) ([]responses.ProductListItemResponse, error) {
+	// Equal sold counts would come back in random order; title and id make it stable.
+	query, args, err := psql.
+		Select(
+			"p.id", "p.slug", "p.title", "p.image_url", "p.type", "p.platform", "p.region",
+			"co.price_cents", "p.base_price_cents", "co.currency",
+		).
+		From("products p").
+		JoinClause(cheapestBuyableOffer).
+		Where(sq.Eq{"p.type": types}). // a slice becomes "IN (...)"
+		OrderBy("p.sold_count DESC", "p.title", "p.id").
+		Limit(uint64(limit)).
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build popular products query: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list popular products: %w", err)
+	}
+
+	listRows, err := pgx.CollectRows(rows, pgx.RowToStructByPos[productListRow])
+	if err != nil {
+		return nil, fmt.Errorf("list popular products: %w", err)
+	}
+
+	// make(..., 0, n) so no products is [] in the JSON, not null.
+	items := make([]responses.ProductListItemResponse, 0, len(listRows))
+	for _, row := range listRows {
+		items = append(items, row.toResponse())
+	}
+
+	return items, nil
 }

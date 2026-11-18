@@ -30,7 +30,7 @@ type ProductFiltersResponse struct {
 }
 
 // NewPriceRange builds the price slider range. It always starts at 0 and ends
-// at the most expensive active offer, rounded up to a whole euro.
+// at the most expensive buyable offer, rounded up to a whole euro.
 func NewPriceRange(maxPriceCents int) PriceRange {
 	return PriceRange{
 		MinCents: 0,

@@ -49,7 +49,7 @@ type ProductListParams struct {
 	Platforms     []models.Platform
 	Regions       []models.Region
 	Genres        []string // genre slugs
-	MinPriceCents *int     // compared with the cheapest active offer
+	MinPriceCents *int     // compared with the cheapest buyable offer
 	MaxPriceCents *int
 	Sort          ProductSort
 	Page          int // starts at 1
