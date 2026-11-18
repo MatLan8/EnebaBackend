@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"eneba-backend/internal/models"
+	"eneba-backend/internal/requests"
+	"eneba-backend/internal/responses"
 )
 
 // keyReservationMinutes is how long checkout holds keys for a buyer. It is a bit
@@ -345,4 +348,124 @@ func (r *OrderRepository) Cancel(ctx context.Context, orderID uuid.UUID) error {
 	}
 
 	return nil
+}
+
+// firstOrderItemTitle joins the title of each order's first item onto "orders o"
+// as first_item.title. LATERAL lets the subquery use o.id from the outer row, so
+// it runs once per order and LIMIT 1 keeps only the first item. It is a LEFT
+// JOIN, so an order without items (a cancelled one) is still listed, with a NULL title.
+const firstOrderItemTitle = `LEFT JOIN LATERAL (
+	SELECT p.title
+	FROM order_items oi
+	JOIN offers f ON f.id = oi.offer_id
+	JOIN products p ON p.id = f.product_id
+	WHERE oi.order_id = o.id
+	ORDER BY oi.created_at, oi.id
+	LIMIT 1
+) first_item ON true`
+
+// orderListRow is one row of the ListByUser query. Its fields are in the same
+// order as the selected columns, so pgx.RowToStructByPos can fill it.
+type orderListRow struct {
+	ID           uuid.UUID
+	PublicID     string
+	CreatedAt    time.Time
+	Status       models.OrderStatus
+	ProductTitle *string // NULL when the order has no items
+	TotalCents   int
+	Currency     string
+}
+
+func (row orderListRow) toResponse() responses.OrderListItemResponse {
+	return responses.OrderListItemResponse{
+		ID:           row.ID,
+		PublicID:     row.PublicID,
+		CreatedAt:    row.CreatedAt,
+		Status:       row.Status,
+		ProductTitle: row.ProductTitle,
+		TotalCents:   row.TotalCents,
+		Currency:     row.Currency,
+	}
+}
+
+// ListByUser returns one page of the user's orders, newest first, plus the
+// total number of orders matching params.
+func (r *OrderRepository) ListByUser(ctx context.Context, userID uuid.UUID, params requests.OrderListParams) ([]responses.OrderListItemResponse, int, error) {
+	where := orderListWhere(userID, params)
+
+	total, err := r.countList(ctx, where)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count orders: %w", err)
+	}
+
+	// Orders created in the same instant would come back in random order, so one
+	// could appear on two pages; id makes the order unique.
+	query, args, err := psql.
+		Select(
+			"o.id", "o.public_id", "o.created_at", "o.status",
+			"first_item.title", "o.total_cents", "o.currency",
+		).
+		From("orders o").
+		JoinClause(firstOrderItemTitle).
+		Where(where).
+		OrderBy("o.created_at DESC", "o.id DESC").
+		Limit(uint64(params.Limit)).
+		Offset(uint64(params.Offset())).
+		ToSql()
+	if err != nil {
+		return nil, 0, fmt.Errorf("build list orders query: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list orders: %w", err)
+	}
+
+	listRows, err := pgx.CollectRows(rows, pgx.RowToStructByPos[orderListRow])
+	if err != nil {
+		return nil, 0, fmt.Errorf("list orders: %w", err)
+	}
+
+	// make(..., 0, n) so an empty page is [] in the JSON, not null.
+	items := make([]responses.OrderListItemResponse, 0, len(listRows))
+	for _, row := range listRows {
+		items = append(items, row.toResponse())
+	}
+
+	return items, total, nil
+}
+
+// countList counts every order matching where, ignoring paging. The filters
+// only use orders columns, so no join is needed.
+func (r *OrderRepository) countList(ctx context.Context, where sq.And) (int, error) {
+	query, args, err := psql.
+		Select("COUNT(*)").
+		From("orders o").
+		Where(where).
+		ToSql()
+	if err != nil {
+		return 0, fmt.Errorf("build count orders query: %w", err)
+	}
+
+	var total int
+	if err := r.db.QueryRow(ctx, query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+
+	return total, nil
+}
+
+// orderListWhere limits the list to the user's own orders and applies the
+// optional public ID search. ILIKE finds the text anywhere in the public ID, in
+// any case ("K3X" -> "o-k3x9q2a"); escapeLike makes % and _ match literally.
+func orderListWhere(userID uuid.UUID, params requests.OrderListParams) sq.And {
+	where := sq.And{
+		sq.Eq{"o.user_id": userID},
+	}
+
+	if params.PublicID != "" {
+		where = append(where, sq.ILike{"o.public_id": "%" + escapeLike(params.PublicID) + "%"})
+	}
+
+	return where
 }

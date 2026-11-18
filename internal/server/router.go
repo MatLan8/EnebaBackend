@@ -24,6 +24,7 @@ type Deps struct {
 	Products      *handlers.ProductHandler
 	Cart          *handlers.CartHandler
 	Checkout      *handlers.CheckoutHandler
+	Orders        *handlers.OrderHandler
 	StripeWebhook *handlers.StripeWebhookHandler
 	Tokens        *services.TokenService // used by the auth middleware
 }
@@ -91,6 +92,9 @@ func NewRouter(d Deps) http.Handler {
 
 			// Turns the cart from the cart_token cookie into an order and a Stripe payment page.
 			r.Post("/checkout", d.Checkout.Create)
+
+			// The signed-in user's own orders, newest first.
+			r.Get("/orders", d.Orders.List)
 		})
 	})
 

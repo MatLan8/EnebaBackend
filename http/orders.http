@@ -1,0 +1,34 @@
+# Order history of the signed-in user. Run "Login" first; GoLand's HTTP client
+# keeps {{accessToken}} for the requests below. Without a token the API answers 401.
+#
+# Query parameters (all optional):
+#   page      page number, starts at 1 (default 1)
+#   limit     orders per page, 1 to 60 (default 10)
+#   publicId  part of an order's public ID, any case, e.g. "k3x" finds "o-k3x9q2a"
+#
+# Orders are newest first and include every status: pending, paid and cancelled.
+# productTitle is the title of the order's first item; it is null for cancelled
+# orders, whose items are deleted when they are cancelled.
+
+### Login
+# Seeded users all use the password Password123!.
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "emma.johnson@example.com",
+  "password": "Password123!"
+}
+
+> {% client.global.set("accessToken", response.body.accessToken); %}
+
+### List orders
+# 200 {"items": [...], "page": 1, "limit": 10, "total": 3, "totalPages": 1}.
+# 400 validation_failed for a bad page or limit.
+GET {{baseUrl}}/api/v1/orders?page=1&limit=10
+Authorization: Bearer {{accessToken}}
+
+### Search orders by public ID
+# Partial and case-insensitive. Replace the value with part of one of your order IDs.
+GET {{baseUrl}}/api/v1/orders?publicId=O-
+Authorization: Bearer {{accessToken}}

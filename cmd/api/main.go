@@ -81,6 +81,7 @@ func run() error {
 		Products:      handlers.NewProductHandler(productRepo),
 		Cart:          handlers.NewCartHandler(pool, cartRepo, cfg.IsProduction()),
 		Checkout:      handlers.NewCheckoutHandler(pool, cartRepo, orderRepo, userRepo, stripeService, cfg.FrontendURL),
+		Orders:        handlers.NewOrderHandler(orderRepo),
 		StripeWebhook: handlers.NewStripeWebhookHandler(pool, orderRepo, cartRepo, stripeService),
 		Tokens:        tokenService,
 	})
