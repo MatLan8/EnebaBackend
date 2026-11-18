@@ -279,13 +279,7 @@ func productListWhere(params requests.ProductListParams) sq.And {
 	where := sq.And{}
 
 	if params.Search != "" {
-		// ILIKE finds the text anywhere in the title ("elden" -> "Elden Ring").
-		// word_similarity (pg_trgm) compares letter triplets, so typos still match
-		// ("eldn ring" -> "Elden Ring", "witcer" -> "The Witcher 3").
-		where = append(where, sq.Or{
-			sq.ILike{"p.title": "%" + escapeLike(params.Search) + "%"},
-			sq.Expr("word_similarity(?, p.title) >= ?", params.Search, searchSimilarityThreshold),
-		})
+		where = append(where, titleMatches(params.Search))
 	}
 
 	// Squirrel turns sq.Eq with a slice into "IN (...)": any of the values matches.
@@ -325,6 +319,100 @@ var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 func escapeLike(s string) string {
 	return likeEscaper.Replace(s)
+}
+
+// titleMatches is the store's search condition on "products p". List and Suggest
+// both use it, so the dropdown finds the same products as the store page.
+// ILIKE finds the text anywhere in the title ("elden" -> "Elden Ring").
+// word_similarity (pg_trgm) compares letter triplets, so typos still match
+// ("eldn ring" -> "Elden Ring", "witcer" -> "The Witcher 3").
+func titleMatches(search string) sq.Or {
+	return sq.Or{
+		sq.ILike{"p.title": "%" + escapeLike(search) + "%"},
+		sq.Expr("word_similarity(?, p.title) >= ?", search, searchSimilarityThreshold),
+	}
+}
+
+// maxSuggestions is how many products the search dropdown shows.
+const maxSuggestions = 6
+
+// productSuggestionRow is one row of the Suggest query, in the same order as
+// the selected columns, so pgx.RowToStructByPos can fill it.
+type productSuggestionRow struct {
+	Slug           string
+	Title          string
+	ImageURL       string
+	Type           models.ProductType
+	PriceCents     int // the cheapest active offer
+	BasePriceCents int // the product's official price, for the discount
+	Currency       string
+}
+
+// toResponse turns the flat row into a dropdown row with a nested price,
+// discounted against the product's base price.
+func (row productSuggestionRow) toResponse() responses.ProductSuggestionResponse {
+	return responses.ProductSuggestionResponse{
+		Slug:           row.Slug,
+		Title:          row.Title,
+		ImageURL:       row.ImageURL,
+		IsDLC:          row.Type == models.ProductTypeDLC,
+		BasePriceCents: row.BasePriceCents,
+		Price:          responses.NewPriceResponse(row.PriceCents, row.BasePriceCents, row.Currency),
+	}
+}
+
+// Suggest returns the best maxSuggestions products for the search dropdown,
+// plus the total number of matches. It matches and prices products exactly like
+// List, so the total equals the store page's total for the same search.
+// Unlike List it orders by how well the title matches, because with only a few
+// rows the product the user is typing has to come first.
+func (r *ProductRepository) Suggest(ctx context.Context, search string) (responses.ProductSuggestionsResponse, error) {
+	where := sq.And{titleMatches(search)}
+
+	total, err := r.countList(ctx, where)
+	if err != nil {
+		return responses.ProductSuggestionsResponse{}, fmt.Errorf("count suggestions: %w", err)
+	}
+	if total == 0 {
+		return responses.NewProductSuggestionsResponse(nil, 0), nil
+	}
+
+	query, args, err := psql.
+		Select(
+			"p.slug", "p.title", "p.image_url", "p.type",
+			"co.price_cents", "p.base_price_cents", "co.currency",
+		).
+		From("products p").
+		JoinClause(cheapestActiveOffer).
+		Where(where).
+		// Titles that start with the search text come first ("eld" -> "Elden Ring";
+		// true sorts after false, hence DESC), then the closest fuzzy matches, then
+		// the best sellers. title and id make the order unique.
+		OrderByClause("p.title ILIKE ? DESC", escapeLike(search)+"%").
+		OrderByClause("word_similarity(?, p.title) DESC", search).
+		OrderBy("p.sold_count DESC", "p.title", "p.id").
+		Limit(maxSuggestions).
+		ToSql()
+	if err != nil {
+		return responses.ProductSuggestionsResponse{}, fmt.Errorf("build suggest query: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return responses.ProductSuggestionsResponse{}, fmt.Errorf("suggest products: %w", err)
+	}
+
+	suggestionRows, err := pgx.CollectRows(rows, pgx.RowToStructByPos[productSuggestionRow])
+	if err != nil {
+		return responses.ProductSuggestionsResponse{}, fmt.Errorf("suggest products: %w", err)
+	}
+
+	items := make([]responses.ProductSuggestionResponse, 0, len(suggestionRows))
+	for _, row := range suggestionRows {
+		items = append(items, row.toResponse())
+	}
+
+	return responses.NewProductSuggestionsResponse(items, total), nil
 }
 
 // GetBySlug returns the product page for slug: the product, its genres and every

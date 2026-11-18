@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"eneba-backend/internal/models"
 )
 
 func TestProductDetailRowToResponse(t *testing.T) {
@@ -43,5 +45,42 @@ func TestProductDetailRowToResponseWithoutOffers(t *testing.T) {
 	// A nil slice would be null in the JSON; the product page expects [].
 	if got.Offers == nil {
 		t.Error("offers = nil; want an empty slice")
+	}
+}
+
+func TestProductSuggestionRowToResponse(t *testing.T) {
+	dlc := productSuggestionRow{
+		Slug:           "elden-ring-shadow-of-the-erdtree",
+		Type:           models.ProductTypeDLC,
+		PriceCents:     2999,
+		BasePriceCents: 3999,
+		Currency:       "EUR",
+	}
+
+	got := dlc.toResponse()
+
+	if !got.IsDLC {
+		t.Error("isDlc = false; want true for a dlc")
+	}
+	if got.Slug != dlc.Slug || got.BasePriceCents != 3999 || got.Price.Cents != 2999 || got.Price.Currency != "EUR" {
+		t.Errorf("unexpected response: %+v", got)
+	}
+	if d := got.Price.DiscountPercent; d == nil || *d != 25 {
+		t.Errorf("discountPercent = %v; want 25", d)
+	}
+
+	game := productSuggestionRow{
+		Type:           models.ProductTypeGame,
+		PriceCents:     5999,
+		BasePriceCents: 5999,
+	}
+
+	got = game.toResponse()
+
+	if got.IsDLC {
+		t.Error("isDlc = true; want false for a game")
+	}
+	if d := got.Price.DiscountPercent; d != nil {
+		t.Errorf("discountPercent = %d; want nil at base price", *d)
 	}
 }

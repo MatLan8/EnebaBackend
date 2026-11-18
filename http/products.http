@@ -10,3 +10,8 @@ GET {{baseUrl}}/api/v1/products?platform=steam&maxPrice=6000&page=1&limit=24
 ### Get product
 # Public. Returns 404 for an unknown slug. Offers are only the buyable ones, cheapest first.
 GET {{baseUrl}}/api/v1/products/elden-ring-pc-steam-key-global
+
+### Product suggestions
+# Public. The search box dropdown: up to 6 products plus the total number of matches.
+# q is required; fewer than 3 characters returns {"items": [], "total": 0}.
+GET {{baseUrl}}/api/v1/products/suggestions?q=wit
