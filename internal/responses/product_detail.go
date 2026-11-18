@@ -20,6 +20,7 @@ type ProductDetailResponse struct {
 	Publisher      *string            `json:"publisher"`
 	ReleaseDate    string             `json:"releaseDate"`    // "YYYY-MM-DD"
 	BasePriceCents int                `json:"basePriceCents"` // official price, offers' discounts are measured against it
+	Currency       string             `json:"currency"`       // of basePriceCents; base prices are in models.DefaultCurrency
 	Genres         []GenreResponse    `json:"genres"`
 	Offers         []OfferResponse    `json:"offers"`
 }

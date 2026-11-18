@@ -56,8 +56,8 @@ func NewCheckoutHandler(
 }
 
 // Create reserves the cart's keys and creates a pending order in one transaction, then opens a
-// Stripe Checkout session. The cart is only emptied by the webhook after payment, so a buyer
-// who cancels on Stripe keeps it; an expired session releases the keys.
+// Stripe Checkout session. A cart has at most one pending order: a previous one is cancelled first.
+// The cart is only emptied by the webhook after payment; an expired session releases the keys.
 func (h *CheckoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -84,8 +84,15 @@ func (h *CheckoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	expired, err := h.expirePreviousSessions(ctx, cartID)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
 	var orderID uuid.UUID
 	var lines []repository.CheckoutLine
+	var superseded []string
 
 	err = database.WithTx(ctx, h.pool, func(tx pgx.Tx) error {
 		carts := h.carts.WithTx(tx)
@@ -100,6 +107,10 @@ func (h *CheckoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var err error
+		if superseded, err = cancelPendingOrders(ctx, orders, cartID); err != nil {
+			return err
+		}
+
 		lines, err = orders.ListCheckoutLines(ctx, cartID)
 		if err != nil {
 			return err
@@ -132,6 +143,13 @@ func (h *CheckoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A session created after expirePreviousSessions looked (e.g. by a double click) is expired now.
+	for _, sessionID := range superseded {
+		if !expired[sessionID] {
+			h.expireSupersededSession(ctx, sessionID)
+		}
+	}
+
 	// Stripe is called after the commit, so a slow network call doesn't keep the cart and keys locked.
 	session, err := h.stripe.CreateCheckoutSession(ctx, services.CheckoutSessionParams{
 		OrderID:       orderID,
@@ -155,8 +173,14 @@ func (h *CheckoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Not fatal: the webhook also finds the order by the order_id in the session metadata.
-	if err := h.orders.SetStripeSession(ctx, orderID, session.ID); err != nil {
+	saved, err := h.orders.SetStripeSession(ctx, orderID, session.ID)
+	if err != nil {
 		slog.ErrorContext(ctx, "save stripe session id", "order_id", orderID, "error", err)
+	} else if !saved {
+		// A newer checkout of the cart cancelled this order while its session was being created.
+		h.expireSupersededSession(ctx, session.ID)
+		httpx.Error(w, r, httpx.CheckoutSuperseded())
+		return
 	}
 
 	slog.InfoContext(ctx, "checkout started", "order_id", orderID, "stripe_session_id", session.ID)
@@ -164,6 +188,68 @@ func (h *CheckoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 		OrderID:     orderID,
 		CheckoutURL: session.URL,
 	})
+}
+
+// Runs before the transaction, so no locks are held during the Stripe calls. Once expired, a
+// previous session can't be paid any more, so cancelling its order can't lose a payment.
+// Returns the expired session IDs.
+func (h *CheckoutHandler) expirePreviousSessions(ctx context.Context, cartID uuid.UUID) (map[string]bool, error) {
+	pending, err := h.orders.ListPendingForCart(ctx, cartID)
+	if err != nil {
+		return nil, err
+	}
+
+	expired := make(map[string]bool, len(pending))
+	for _, order := range pending {
+		if order.StripeSessionID == nil {
+			continue
+		}
+
+		err := h.stripe.ExpireCheckoutSession(ctx, *order.StripeSessionID)
+		if errors.Is(err, services.ErrCheckoutSessionCompleted) {
+			return nil, httpx.CheckoutAlreadyCompleted(order.ID.String())
+		}
+		if err != nil {
+			slog.ErrorContext(ctx, "expire previous stripe session", "order_id", order.ID, "error", err)
+			return nil, httpx.PaymentProviderError()
+		}
+
+		expired[*order.StripeSessionID] = true
+	}
+
+	return expired, nil
+}
+
+// Returns the Stripe session IDs of the cancelled orders.
+func cancelPendingOrders(ctx context.Context, orders *repository.OrderRepository, cartID uuid.UUID) ([]string, error) {
+	pending, err := orders.ListPendingForCart(ctx, cartID)
+	if err != nil {
+		return nil, err
+	}
+
+	var sessionIDs []string
+	for _, order := range pending {
+		if err := orders.Cancel(ctx, order.ID); err != nil {
+			return nil, err
+		}
+		if order.StripeSessionID != nil {
+			sessionIDs = append(sessionIDs, *order.StripeSessionID)
+		}
+	}
+
+	return sessionIDs, nil
+}
+
+// Best effort: the order is already cancelled, and a session Stripe fails to expire just runs out.
+func (h *CheckoutHandler) expireSupersededSession(ctx context.Context, sessionID string) {
+	err := h.stripe.ExpireCheckoutSession(context.WithoutCancel(ctx), sessionID)
+	if errors.Is(err, services.ErrCheckoutSessionCompleted) {
+		slog.ErrorContext(ctx, "superseded stripe session was paid, refund manually", "stripe_session_id", sessionID)
+		return
+	}
+	if err != nil {
+		slog.ErrorContext(ctx, "expire superseded stripe session", "stripe_session_id", sessionID, "error", err)
+	}
 }
 
 func (h *CheckoutHandler) cancelOrder(ctx context.Context, orderID uuid.UUID) error {

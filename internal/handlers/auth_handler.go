@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"time"
@@ -127,8 +128,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, newAuthResponse(user, tokens))
 }
 
+// Parallel refreshes from one browser (e.g. two tabs) send the same token; the slower ones arrive
+// just after the rotation and must not look like theft.
+const refreshReuseGrace = 30 * time.Second
+
 // Refresh rotates the token: the old one is revoked and a new one is set in the cookie.
 // Reusing a rotated token means it was probably stolen, so every session of the user is revoked.
+// Within refreshReuseGrace of the rotation it only gets an access token, with no new cookie.
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -142,6 +148,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var user *models.User
 	var tokens *services.IssuedTokens
 	reused := false
+	concurrent := false
 
 	err = database.WithTx(ctx, h.pool, func(tx pgx.Tx) error {
 		refreshTokens := h.refreshTokens.WithTx(tx)
@@ -151,6 +158,12 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 			return models.ErrInvalidToken
 		}
 		if err != nil {
+			return err
+		}
+
+		if stored.WasRotatedWithin(refreshReuseGrace, time.Now()) {
+			concurrent = true
+			user, tokens, err = h.accessTokenForSuccessor(ctx, tx, stored)
 			return err
 		}
 
@@ -182,15 +195,49 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		err = models.ErrInvalidToken
 	}
 	if err != nil {
-		if errors.Is(err, models.ErrInvalidToken) {
+		// A late parallel request must not clear the cookie the first one has just set.
+		if errors.Is(err, models.ErrInvalidToken) && !concurrent {
 			h.clearRefreshCookie(w)
 		}
 		httpx.Error(w, r, err)
 		return
 	}
 
-	h.setRefreshCookie(w, tokens.RefreshToken.Raw, tokens.RefreshToken.ExpiresAt)
+	// The browser already has, or is about to get, the successor's cookie from the first refresh.
+	if !concurrent {
+		h.setRefreshCookie(w, tokens.RefreshToken.Raw, tokens.RefreshToken.ExpiresAt)
+	}
 	httpx.WriteJSON(w, http.StatusOK, newAuthResponse(user, tokens))
+}
+
+// Only while the successor token is still active: after a logout or a further rotation the
+// late request gets a plain 401, without revoking every session.
+func (h *AuthHandler) accessTokenForSuccessor(ctx context.Context, tx pgx.Tx, stored *models.RefreshToken) (*models.User, *services.IssuedTokens, error) {
+	successor, err := h.refreshTokens.WithTx(tx).GetByHashForUpdate(ctx, *stored.ReplacedByTokenHash)
+	if errors.Is(err, models.ErrNotFound) {
+		return nil, nil, models.ErrInvalidToken
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	if !successor.IsActive(time.Now()) {
+		return nil, nil, models.ErrInvalidToken
+	}
+
+	user, err := h.users.WithTx(tx).GetByID(ctx, stored.UserID)
+	if errors.Is(err, models.ErrNotFound) {
+		return nil, nil, models.ErrInvalidToken
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+
+	accessToken, expiresAt, err := h.tokens.NewAccessToken(user)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return user, &services.IssuedTokens{AccessToken: accessToken, AccessTokenExpiresAt: expiresAt}, nil
 }
 
 // Logout always returns 204, even without a cookie, so logging out twice is harmless.

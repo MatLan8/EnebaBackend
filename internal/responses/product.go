@@ -24,6 +24,7 @@ type ProductListItemResponse struct {
 	Platform       models.Platform    `json:"platform"`
 	Region         models.Region      `json:"region"`
 	BasePriceCents int                `json:"basePriceCents"` // official price, shown crossed out
+	Currency       string             `json:"currency"`       // of basePriceCents; base prices are in models.DefaultCurrency
 	Price          PriceResponse      `json:"price"`
 }
 

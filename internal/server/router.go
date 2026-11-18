@@ -34,6 +34,7 @@ func NewRouter(d Deps) http.Handler {
 
 	// Order matters: each middleware wraps the ones after it.
 	r.Use(chimw.RequestID)
+	r.Use(middleware.RequestIDHeader)
 	r.Use(middleware.RequestLogger) // log it (sees the 500 written by Recoverer)
 	r.Use(chimw.Recoverer)          // turn panics into 500 instead of crashing
 	r.Use(middleware.CORS(d.Config.CORSOrigins))

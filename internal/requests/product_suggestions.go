@@ -1,6 +1,7 @@
 package requests
 
 import (
+	"fmt"
 	"net/url"
 	"strings"
 	"unicode/utf8"
@@ -29,7 +30,14 @@ func ParseSuggestionQuery(query url.Values) (ProductSuggestionParams, error) {
 		})
 	}
 
-	return ProductSuggestionParams{
+	params := ProductSuggestionParams{
 		Search: strings.TrimSpace(query.Get("q")),
-	}, nil
+	}
+	if utf8.RuneCountInString(params.Search) > maxProductSearchLength {
+		return ProductSuggestionParams{}, httpx.ValidationFailed(map[string]string{
+			"q": fmt.Sprintf("must be at most %d characters", maxProductSearchLength),
+		})
+	}
+
+	return params, nil
 }

@@ -170,21 +170,54 @@ func (r *OrderRepository) CreateOrderItems(ctx context.Context, orderID uuid.UUI
 	return nil
 }
 
-func (r *OrderRepository) SetStripeSession(ctx context.Context, orderID uuid.UUID, sessionID string) error {
+// ok is false if the order is no longer pending, i.e. a newer checkout of its cart cancelled it.
+func (r *OrderRepository) SetStripeSession(ctx context.Context, orderID uuid.UUID, sessionID string) (bool, error) {
 	query, args, err := psql.
 		Update("orders").
 		Set("stripe_session_id", sessionID).
-		Where(sq.Eq{"id": orderID}).
+		Where(sq.Eq{"id": orderID, "status": models.OrderStatusPending}).
 		ToSql()
 	if err != nil {
-		return fmt.Errorf("build set stripe session: %w", err)
+		return false, fmt.Errorf("build set stripe session: %w", err)
 	}
 
-	if _, err := r.db.Exec(ctx, query, args...); err != nil {
-		return fmt.Errorf("set stripe session: %w", err)
+	tag, err := r.db.Exec(ctx, query, args...)
+	if err != nil {
+		return false, fmt.Errorf("set stripe session: %w", err)
 	}
 
-	return nil
+	return tag.RowsAffected() == 1, nil
+}
+
+type PendingOrder struct {
+	ID              uuid.UUID
+	StripeSessionID *string // nil while its checkout is still creating the session
+}
+
+// Inside a transaction the rows stay locked, so the webhook can't change them meanwhile.
+func (r *OrderRepository) ListPendingForCart(ctx context.Context, cartID uuid.UUID) ([]PendingOrder, error) {
+	query, args, err := psql.
+		Select("id", "stripe_session_id").
+		From("orders").
+		Where(sq.Eq{"cart_id": cartID, "status": models.OrderStatusPending}).
+		OrderBy("created_at", "id").
+		Suffix("FOR UPDATE").
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build list pending orders: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list pending orders: %w", err)
+	}
+
+	pending, err := pgx.CollectRows(rows, pgx.RowToStructByPos[PendingOrder])
+	if err != nil {
+		return nil, fmt.Errorf("list pending orders: %w", err)
+	}
+
+	return pending, nil
 }
 
 // In models.Order's field order.
@@ -337,6 +370,8 @@ const firstOrderItemTitle = `LEFT JOIN LATERAL (
 	LIMIT 1
 ) first_item ON true`
 
+const orderItemCount = "(SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id)"
+
 // Fields follow the order of the selected columns (RowToStructByPos).
 type orderListRow struct {
 	ID           uuid.UUID
@@ -344,6 +379,7 @@ type orderListRow struct {
 	CreatedAt    time.Time
 	Status       models.OrderStatus
 	ProductTitle *string // NULL for a cancelled order (no items)
+	ItemCount    int
 	TotalCents   int
 	Currency     string
 }
@@ -355,6 +391,7 @@ func (row orderListRow) toResponse() responses.OrderListItemResponse {
 		CreatedAt:    row.CreatedAt,
 		Status:       row.Status,
 		ProductTitle: row.ProductTitle,
+		ItemCount:    row.ItemCount,
 		TotalCents:   row.TotalCents,
 		Currency:     row.Currency,
 	}
@@ -372,7 +409,7 @@ func (r *OrderRepository) ListByUser(ctx context.Context, userID uuid.UUID, para
 	query, args, err := psql.
 		Select(
 			"o.id", "o.public_id", "o.created_at", "o.status",
-			"first_item.title", "o.total_cents", "o.currency",
+			"first_item.title", orderItemCount, "o.total_cents", "o.currency",
 		).
 		From("orders o").
 		JoinClause(firstOrderItemTitle).
@@ -477,6 +514,7 @@ func (r *OrderRepository) GetByUser(ctx context.Context, userID, orderID uuid.UU
 			Title:          row.Title,
 			ImageURL:       row.ImageURL,
 			UnitPriceCents: row.UnitPriceCents,
+			Currency:       order.Currency,
 			SellerName:     row.SellerName,
 		})
 	}

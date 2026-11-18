@@ -29,7 +29,9 @@ Content-Type: application/json
 }
 
 ### Checkout
-# 201 {"orderId", "checkoutUrl"}; 400 cart_empty, 409 offer_unavailable or insufficient_stock, 502 if Stripe fails.
-# The keys stay reserved for 35 minutes; the cart is emptied only after payment.
+# 201 {"orderId", "checkoutUrl"}; 400 cart_empty, 409 offer_unavailable, insufficient_stock,
+# checkout_already_completed or checkout_superseded, 502 if Stripe fails.
+# The keys stay reserved for 35 minutes; the cart is emptied only after payment. Running it again
+# expires the previous session and cancels its order, so a cart has at most one pending order.
 POST {{baseUrl}}/api/v1/checkout
 Authorization: Bearer {{accessToken}}

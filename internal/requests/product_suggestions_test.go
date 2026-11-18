@@ -4,13 +4,26 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 
 	"eneba-backend/internal/httpx"
 )
 
-func TestParseSuggestionQueryMissingQ(t *testing.T) {
-	_, err := ParseSuggestionQuery(url.Values{})
+func TestParseSuggestionQueryInvalidQ(t *testing.T) {
+	for name, query := range map[string]url.Values{
+		"missing":  {},
+		"too long": {"q": {strings.Repeat("ą", 101)}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			assertQProblem(t, query)
+		})
+	}
+}
+
+func assertQProblem(t *testing.T, query url.Values) {
+	t.Helper()
+	_, err := ParseSuggestionQuery(query)
 
 	var apiErr *httpx.APIError
 	if !errors.As(err, &apiErr) {

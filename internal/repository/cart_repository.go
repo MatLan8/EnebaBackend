@@ -38,14 +38,23 @@ type cartItemRow struct {
 	Type              models.ProductType
 	SellerName        string
 	SellerLogoURL     *string
+	IsActive          bool
 }
 
+// A deactivated offer can't be bought, so none of its keys count as available.
 func (row cartItemRow) toResponse() responses.CartItemResponse {
+	available := row.AvailableQuantity
+	if !row.IsActive {
+		available = 0
+	}
+
 	return responses.CartItemResponse{
 		OfferID:           row.OfferID,
 		Quantity:          row.Quantity,
-		AvailableQuantity: row.AvailableQuantity,
+		AvailableQuantity: available,
+		Available:         row.Quantity <= available,
 		PriceCents:        row.PriceCents,
+		Currency:          row.Currency,
 		Product: responses.CartProductResponse{
 			Slug:     row.Slug,
 			Title:    row.Title,
@@ -77,10 +86,12 @@ func newCartResponse(rows []cartItemRow) responses.CartResponse {
 // Prices and stock are read live from the offers. An unknown cart ID gives an empty cart.
 func (r *CartRepository) GetCart(ctx context.Context, cartID uuid.UUID) (responses.CartResponse, error) {
 	query, args, err := psql.
-		Select(
-			"ci.offer_id", "ci.quantity", availableKeyCount, "o.price_cents", "o.currency",
+		Select("ci.offer_id", "ci.quantity").
+		Column(sq.Expr(availableForCartCount, cartID)).
+		Columns(
+			"o.price_cents", "o.currency",
 			"p.slug", "p.title", "p.image_url", "p.type",
-			"s.name", "s.logo_url",
+			"s.name", "s.logo_url", "o.is_active",
 		).
 		From("cart_items ci").
 		Join("offers o ON o.id = ci.offer_id").
@@ -204,12 +215,12 @@ func (r *CartRepository) GetQuantityForUpdate(ctx context.Context, cartID, offer
 	return quantity, nil
 }
 
-func (r *CartRepository) CountAvailableKeys(ctx context.Context, offerID uuid.UUID) (int, error) {
+func (r *CartRepository) CountAvailableKeys(ctx context.Context, cartID, offerID uuid.UUID) (int, error) {
 	query, args, err := psql.
 		Select("COUNT(*)").
 		From("digital_keys k").
 		Where(sq.Eq{"k.offer_id": offerID}).
-		Where(availableKeyCondition).
+		Where(sq.Expr(availableForCartCondition, cartID)).
 		ToSql()
 	if err != nil {
 		return 0, fmt.Errorf("build count available keys: %w", err)

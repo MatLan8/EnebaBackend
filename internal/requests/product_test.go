@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/url"
 	"slices"
+	"strings"
 	"testing"
 
 	"eneba-backend/internal/httpx"
@@ -64,6 +65,7 @@ func TestParseProductListQueryInvalid(t *testing.T) {
 		{"page zero", "page=0", "page"},
 		{"limit zero", "limit=0", "limit"},
 		{"limit too big", "limit=61", "limit"},
+		{"search too long", "q=" + strings.Repeat("a", 101), "q"},
 	}
 
 	for _, tt := range tests {

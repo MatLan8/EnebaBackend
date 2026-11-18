@@ -9,14 +9,15 @@ import (
 	"eneba-backend/internal/requests"
 )
 
-// ProductTitle is the first item's title; null for a cancelled order, because cancelling deletes
-// the items to free their keys.
+// ProductTitle is the first item's title and ItemCount the number of keys; null and 0 for a
+// cancelled order, because cancelling deletes the items to free their keys.
 type OrderListItemResponse struct {
 	ID           uuid.UUID          `json:"id"`
 	PublicID     string             `json:"publicId"`
 	CreatedAt    time.Time          `json:"createdAt"`
 	Status       models.OrderStatus `json:"status"`
 	ProductTitle *string            `json:"productTitle"`
+	ItemCount    int                `json:"itemCount"`
 	TotalCents   int                `json:"totalCents"`
 	Currency     string             `json:"currency"`
 }

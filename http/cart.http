@@ -4,6 +4,7 @@
 @offerId = f26f9e4f-2b98-405d-9b59-c9044d33566c
 
 ### Get cart
+# Each item has "available": false when its offer is inactive or has fewer free keys than its quantity.
 # Without a cart this returns {"items": [], "itemCount": 0, "totalCents": 0, "currency": "EUR"} and creates nothing.
 GET {{baseUrl}}/api/v1/cart
 

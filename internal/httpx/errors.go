@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strconv"
 
 	"github.com/go-chi/chi/v5/middleware"
 
@@ -16,7 +15,7 @@ type APIError struct {
 	Status  int
 	Code    string
 	Message string
-	Details map[string]string // optional, e.g. field -> problem for validation errors
+	Details map[string]any // optional; values keep their JSON type, e.g. availableQuantity is a number
 }
 
 func (e *APIError) Error() string {
@@ -27,8 +26,13 @@ func BadRequest(message string) *APIError {
 	return &APIError{Status: http.StatusBadRequest, Code: "bad_request", Message: message}
 }
 
+// details maps a field or query parameter name to its problem.
 func ValidationFailed(details map[string]string) *APIError {
-	return &APIError{Status: http.StatusBadRequest, Code: "validation_failed", Message: "request validation failed", Details: details}
+	typed := make(map[string]any, len(details))
+	for field, problem := range details {
+		typed[field] = problem
+	}
+	return &APIError{Status: http.StatusBadRequest, Code: "validation_failed", Message: "request validation failed", Details: typed}
 }
 
 // available lets the client lower the quantity.
@@ -37,7 +41,7 @@ func InsufficientStock(available int) *APIError {
 		Status:  http.StatusConflict,
 		Code:    "insufficient_stock",
 		Message: fmt.Sprintf("not enough keys in stock, %d available", available),
-		Details: map[string]string{"availableQuantity": strconv.Itoa(available)},
+		Details: map[string]any{"availableQuantity": available},
 	}
 }
 
@@ -57,7 +61,7 @@ func OfferUnavailable(offerID string) *APIError {
 		Status:  http.StatusConflict,
 		Code:    "offer_unavailable",
 		Message: "an offer in the cart is no longer available",
-		Details: map[string]string{"offerId": offerID},
+		Details: map[string]any{"offerId": offerID},
 	}
 }
 
@@ -71,8 +75,24 @@ func OrderNotPaid(status string) *APIError {
 		Status:  http.StatusConflict,
 		Code:    "order_not_paid",
 		Message: "the order is not paid, so its keys are not available",
-		Details: map[string]string{"status": status},
+		Details: map[string]any{"status": status},
 	}
+}
+
+// The cart's previous Stripe session was already paid; orderID is that order, which the
+// webhook is about to mark paid (or already has).
+func CheckoutAlreadyCompleted(orderID string) *APIError {
+	return &APIError{
+		Status:  http.StatusConflict,
+		Code:    "checkout_already_completed",
+		Message: "this cart was already paid for",
+		Details: map[string]any{"orderId": orderID},
+	}
+}
+
+// A newer checkout of the same cart (e.g. a double click) replaced this one while it was starting.
+func CheckoutSuperseded() *APIError {
+	return &APIError{Status: http.StatusConflict, Code: "checkout_superseded", Message: "a newer checkout of this cart replaced this one"}
 }
 
 func InvalidSignature() *APIError {
@@ -85,9 +105,9 @@ type errorResponse struct {
 }
 
 type errorDetail struct {
-	Code    string            `json:"code"`
-	Message string            `json:"message"`
-	Details map[string]string `json:"details,omitempty"`
+	Code    string         `json:"code"`
+	Message string         `json:"message"`
+	Details map[string]any `json:"details,omitempty"`
 }
 
 // Unknown errors become a generic 500 and are logged in full, so SQL errors never leak to the client.

@@ -19,8 +19,10 @@ type CartResponse struct {
 type CartItemResponse struct {
 	OfferID           uuid.UUID           `json:"offerId"`
 	Quantity          int                 `json:"quantity"`
-	AvailableQuantity int                 `json:"availableQuantity"` // keys not sold or reserved, caps the "+" button
+	AvailableQuantity int                 `json:"availableQuantity"` // keys not sold or reserved, caps the "+" button; 0 if the offer is inactive
+	Available         bool                `json:"available"`         // false if checkout would fail for this item (offer inactive or too few keys)
 	PriceCents        int                 `json:"priceCents"`        // one key, the offer's current price
+	Currency          string              `json:"currency"`
 	Product           CartProductResponse `json:"product"`
 	Seller            CartSellerResponse  `json:"seller"`
 }

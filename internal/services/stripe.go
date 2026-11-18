@@ -93,6 +93,32 @@ func (s *StripeService) CreateCheckoutSession(ctx context.Context, p CheckoutSes
 	return CheckoutSession{ID: session.ID, URL: session.URL}, nil
 }
 
+// The session was paid, so it can no longer be expired.
+var ErrCheckoutSessionCompleted = errors.New("stripe checkout session is already complete")
+
+// An already expired session counts as success, so this is safe to call twice.
+func (s *StripeService) ExpireCheckoutSession(ctx context.Context, sessionID string) error {
+	_, err := s.client.V1CheckoutSessions.Expire(ctx, sessionID, nil)
+	if err == nil {
+		return nil
+	}
+
+	// Stripe only expires open sessions; the session's status tells why it refused.
+	session, getErr := s.client.V1CheckoutSessions.Retrieve(ctx, sessionID, nil)
+	if getErr != nil {
+		return fmt.Errorf("expire stripe checkout session: %w", err)
+	}
+
+	switch session.Status {
+	case stripe.CheckoutSessionStatusExpired:
+		return nil
+	case stripe.CheckoutSessionStatusComplete:
+		return ErrCheckoutSessionCompleted
+	default:
+		return fmt.Errorf("expire stripe checkout session: %w", err)
+	}
+}
+
 // Object is the raw JSON of the object the event is about, e.g. the Checkout session.
 type StripeEvent struct {
 	ID     string

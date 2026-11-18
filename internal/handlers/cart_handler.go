@@ -99,7 +99,7 @@ func (h *CartHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 
-		if err := ensureInStock(ctx, carts, offerID, quantity); err != nil {
+		if err := ensureInStock(ctx, carts, cartID, offerID, quantity); err != nil {
 			return err
 		}
 
@@ -157,7 +157,7 @@ func (h *CartHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 
-		if err := ensureInStock(ctx, carts, offerID, quantity); err != nil {
+		if err := ensureInStock(ctx, carts, cartID, offerID, quantity); err != nil {
 			return err
 		}
 
@@ -272,8 +272,8 @@ func lockExistingCart(ctx context.Context, carts *repository.CartRepository, car
 }
 
 // Checkout checks the stock again, since keys can sell out while they sit in the cart.
-func ensureInStock(ctx context.Context, carts *repository.CartRepository, offerID uuid.UUID, quantity int) error {
-	available, err := carts.CountAvailableKeys(ctx, offerID)
+func ensureInStock(ctx context.Context, carts *repository.CartRepository, cartID, offerID uuid.UUID, quantity int) error {
+	available, err := carts.CountAvailableKeys(ctx, cartID, offerID)
 	if err != nil {
 		return err
 	}

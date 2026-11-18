@@ -49,17 +49,11 @@ func (r *ProductRepository) GetFilters(ctx context.Context) (responses.ProductFi
 		return responses.ProductFiltersResponse{}, fmt.Errorf("count products by genre: %w", err)
 	}
 
-	maxPriceCents, err := r.maxBuyablePrice(ctx)
-	if err != nil {
-		return responses.ProductFiltersResponse{}, fmt.Errorf("select max price: %w", err)
-	}
-
 	return responses.ProductFiltersResponse{
 		Types:     types,
 		Platforms: platforms,
 		Regions:   regions,
 		Genres:    genres,
-		Price:     responses.NewPriceRange(maxPriceCents),
 	}, nil
 }
 
@@ -106,25 +100,6 @@ func (r *ProductRepository) countProductsByGenre(ctx context.Context) ([]respons
 	}
 
 	return pgx.CollectRows(rows, pgx.RowToStructByPos[responses.GenreFilterOption])
-}
-
-func (r *ProductRepository) maxBuyablePrice(ctx context.Context) (int, error) {
-	query, args, err := psql.
-		Select("COALESCE(MAX(o.price_cents), 0)"). // MAX of no rows is NULL
-		From("offers o").
-		Where(sq.Eq{"o.is_active": true}).
-		Where(hasAvailableKey).
-		ToSql()
-	if err != nil {
-		return 0, fmt.Errorf("build query: %w", err)
-	}
-
-	var maxCents int
-	if err := r.db.QueryRow(ctx, query, args...).Scan(&maxCents); err != nil {
-		return 0, err
-	}
-
-	return maxCents, nil
 }
 
 // The cheapest buyable offer is the first offer on the product page, so every list shows the price
@@ -176,6 +151,7 @@ func (row productListRow) toResponse() responses.ProductListItemResponse {
 		Platform:       row.Platform,
 		Region:         row.Region,
 		BasePriceCents: row.BasePriceCents,
+		Currency:       models.DefaultCurrency,
 		Price:          responses.NewPriceResponse(row.PriceCents, row.BasePriceCents, row.Currency),
 	}
 }
@@ -325,6 +301,7 @@ func (row productSuggestionRow) toResponse() responses.ProductSuggestionResponse
 		ImageURL:       row.ImageURL,
 		IsDLC:          row.Type == models.ProductTypeDLC,
 		BasePriceCents: row.BasePriceCents,
+		Currency:       models.DefaultCurrency,
 		Price:          responses.NewPriceResponse(row.PriceCents, row.BasePriceCents, row.Currency),
 	}
 }
@@ -522,6 +499,7 @@ func (row productDetailRow) toResponse(genres []responses.GenreResponse, offers 
 		Publisher:      row.Publisher,
 		ReleaseDate:    row.ReleaseDate.Format(time.DateOnly),
 		BasePriceCents: row.BasePriceCents,
+		Currency:       models.DefaultCurrency,
 		Genres:         genres,
 		Offers:         offerResponses,
 	}

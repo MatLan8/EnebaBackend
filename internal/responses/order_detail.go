@@ -14,6 +14,7 @@ type OrderDetailItemResponse struct {
 	Title          string    `json:"title"`
 	ImageURL       string    `json:"imageUrl"`
 	UnitPriceCents int       `json:"unitPriceCents"` // the price paid, fixed at checkout
+	Currency       string    `json:"currency"`       // the order's currency, repeated so each price has one
 	SellerName     string    `json:"sellerName"`
 }
 

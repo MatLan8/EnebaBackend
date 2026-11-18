@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"eneba-backend/internal/httpx"
 	"eneba-backend/internal/models"
@@ -14,6 +15,7 @@ import (
 const (
 	defaultProductPageLimit = 24
 	maxProductPageLimit     = 60
+	maxProductSearchLength  = 100 // also used by the suggestions
 )
 
 type ProductSort string
@@ -65,6 +67,10 @@ func ParseProductListQuery(query url.Values) (ProductListParams, error) {
 		Genres: query["genre"], // unknown slugs simply match nothing
 		Page:   1,
 		Limit:  defaultProductPageLimit,
+	}
+
+	if utf8.RuneCountInString(params.Search) > maxProductSearchLength {
+		details["q"] = fmt.Sprintf("must be at most %d characters", maxProductSearchLength)
 	}
 
 	var ok bool

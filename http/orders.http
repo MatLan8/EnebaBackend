@@ -1,6 +1,6 @@
 # Run "Login" first; without a token the API answers 401.
 # Query (all optional): page (default 1), limit 1 to 60 (default 10), publicId (part, any case).
-# Every status is listed; productTitle is null for cancelled orders (their items are deleted).
+# Every status is listed; productTitle is null and itemCount 0 for cancelled orders (their items are deleted).
 
 # orderId is one of emma's orders; replace it with an id from "List orders".
 @orderId = aa0bc79b-a3aa-419e-99b7-718fa277506f

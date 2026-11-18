@@ -39,6 +39,7 @@ type keyListRow struct {
 	ProductTitle    string
 	ProductImageURL string
 	PriceCents      int
+	Currency        string
 }
 
 func (row keyListRow) toResponse() responses.KeyListItemResponse {
@@ -51,6 +52,7 @@ func (row keyListRow) toResponse() responses.KeyListItemResponse {
 		ProductTitle:    row.ProductTitle,
 		ProductImageURL: row.ProductImageURL,
 		PriceCents:      row.PriceCents,
+		Currency:        row.Currency,
 	}
 }
 
@@ -67,7 +69,7 @@ func (r *KeyRepository) List(ctx context.Context, userID uuid.UUID, params reque
 	query, args, err := psql.
 		Select(
 			"oi.digital_key_id", "o.id", "o.public_id", "o.paid_at",
-			"s.name", "p.title", "p.image_url", "oi.unit_price_cents",
+			"s.name", "p.title", "p.image_url", "oi.unit_price_cents", "o.currency",
 		).
 		From(boughtKeys).
 		Where(where).

@@ -18,6 +18,7 @@ type KeyListItemResponse struct {
 	ProductTitle    string    `json:"productTitle"`
 	ProductImageURL string    `json:"productImageUrl"`
 	PriceCents      int       `json:"priceCents"` // the price paid for this key
+	Currency        string    `json:"currency"`
 }
 
 type KeyListResponse struct {
