@@ -509,10 +509,6 @@ func (r *ProductRepository) listGenres(ctx context.Context, productID uuid.UUID)
 	return pgx.CollectRows(rows, pgx.RowToStructByPos[responses.GenreResponse])
 }
 
-// hasUnsoldKey limits a query on "offers o" to offers that still have at least
-// one digital key left to sell. An offer without keys can't be bought.
-var hasUnsoldKey = sq.Expr("EXISTS (SELECT 1 FROM digital_keys k WHERE k.offer_id = o.id AND k.order_item_id IS NULL)")
-
 // offerRow is one row of the listBuyableOffers query: an offer with its seller,
 // in the same order as the selected columns.
 type offerRow struct {
@@ -525,8 +521,8 @@ type offerRow struct {
 	SellerRating  float64 // NUMERIC(4,2) in the database
 }
 
-// listBuyableOffers returns the product's active offers that still have unsold
-// keys, cheapest first. Equal prices go to the better rated seller first, and
+// listBuyableOffers returns the product's active offers that still have an
+// available key (see availableKeyCondition), cheapest first. Equal prices go to the better rated seller first, and
 // o.id makes the order the same on every request.
 func (r *ProductRepository) listBuyableOffers(ctx context.Context, productID uuid.UUID) ([]offerRow, error) {
 	query, args, err := psql.
@@ -537,7 +533,7 @@ func (r *ProductRepository) listBuyableOffers(ctx context.Context, productID uui
 		From("offers o").
 		Join("sellers s ON s.id = o.seller_id").
 		Where(sq.Eq{"o.product_id": productID, "o.is_active": true}).
-		Where(hasUnsoldKey).
+		Where(hasAvailableKey).
 		OrderBy("o.price_cents ASC", "s.rating DESC", "o.id").
 		ToSql()
 	if err != nil {

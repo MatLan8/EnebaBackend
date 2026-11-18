@@ -36,7 +36,7 @@ func ValidationFailed(details map[string]string) *APIError {
 }
 
 // InsufficientStock builds a 409 error for asking for more keys than an offer has left.
-// available is how many unsold keys there are, so the client can lower the quantity.
+// available is how many keys can still be bought, so the client can lower the quantity.
 func InsufficientStock(available int) *APIError {
 	return &APIError{
 		Status:  http.StatusConflict,

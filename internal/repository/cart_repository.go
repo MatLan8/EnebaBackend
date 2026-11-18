@@ -26,9 +26,6 @@ func (r *CartRepository) WithTx(tx pgx.Tx) *CartRepository {
 	return &CartRepository{db: tx}
 }
 
-// unsoldKeyCount counts the unsold digital keys of offer "o", i.e. its stock.
-const unsoldKeyCount = "(SELECT COUNT(*) FROM digital_keys k WHERE k.offer_id = o.id AND k.order_item_id IS NULL)"
-
 // cartItemRow is one row of the GetCart query, in the same order as the selected columns.
 type cartItemRow struct {
 	OfferID           uuid.UUID
@@ -84,7 +81,7 @@ func newCartResponse(rows []cartItemRow) responses.CartResponse {
 func (r *CartRepository) GetCart(ctx context.Context, cartID uuid.UUID) (responses.CartResponse, error) {
 	query, args, err := psql.
 		Select(
-			"ci.offer_id", "ci.quantity", unsoldKeyCount, "o.price_cents", "o.currency",
+			"ci.offer_id", "ci.quantity", availableKeyCount, "o.price_cents", "o.currency",
 			"p.slug", "p.title", "p.image_url", "p.type",
 			"s.name", "s.logo_url",
 		).
@@ -223,20 +220,22 @@ func (r *CartRepository) GetQuantityForUpdate(ctx context.Context, cartID, offer
 	return quantity, nil
 }
 
-// CountUnsoldKeys returns the offer's stock: how many of its keys are not sold yet.
-func (r *CartRepository) CountUnsoldKeys(ctx context.Context, offerID uuid.UUID) (int, error) {
+// CountAvailableKeys returns the offer's stock: how many of its keys can be bought
+// right now, i.e. are neither sold nor reserved by a checkout (availableKeyCondition).
+func (r *CartRepository) CountAvailableKeys(ctx context.Context, offerID uuid.UUID) (int, error) {
 	query, args, err := psql.
 		Select("COUNT(*)").
-		From("digital_keys").
-		Where(sq.Eq{"offer_id": offerID, "order_item_id": nil}).
+		From("digital_keys k").
+		Where(sq.Eq{"k.offer_id": offerID}).
+		Where(availableKeyCondition).
 		ToSql()
 	if err != nil {
-		return 0, fmt.Errorf("build count unsold keys: %w", err)
+		return 0, fmt.Errorf("build count available keys: %w", err)
 	}
 
 	var count int
 	if err := r.db.QueryRow(ctx, query, args...).Scan(&count); err != nil {
-		return 0, fmt.Errorf("count unsold keys: %w", err)
+		return 0, fmt.Errorf("count available keys: %w", err)
 	}
 
 	return count, nil

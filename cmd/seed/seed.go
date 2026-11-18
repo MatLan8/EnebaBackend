@@ -53,13 +53,14 @@ func ensureCatalogEmpty(ctx context.Context, tx pgx.Tx) error {
 // is allowed even though they reference each other with foreign keys.
 // Users and refresh tokens are left alone, so -reset can rebuild the catalog
 // without deleting accounts.
-// cart_items and carts are emptied too when they exist, because cart items
-// reference offers and would otherwise block TRUNCATE. Carts without items are
-// useless, so they go as well; their cookies then simply point to no cart.
+// cart_items, carts, order_items and orders are emptied too when they exist,
+// because cart and order items reference offers and keys and would otherwise
+// block TRUNCATE. Carts and orders without items are useless, so they go as
+// well; cart cookies then simply point to no cart.
 // It runs before the migrations, so on a fresh database the tables don't exist
 // yet and there is nothing to empty. The catalog tables come from migration
-// 000003, so checking for products is enough. cart_items and carts come from
-// later migrations and are checked separately.
+// 000003, so checking for products is enough. The cart and order tables come
+// from later migrations and are checked separately.
 func truncateCatalog(ctx context.Context, pool *pgxpool.Pool) error {
 	var exists bool
 	if err := pool.QueryRow(ctx, "SELECT to_regclass('products') IS NOT NULL").Scan(&exists); err != nil {
@@ -70,7 +71,7 @@ func truncateCatalog(ctx context.Context, pool *pgxpool.Pool) error {
 	}
 
 	tables := []string{"digital_keys", "offers", "sellers", "product_genres", "genres", "products"}
-	for _, table := range []string{"cart_items", "carts"} {
+	for _, table := range []string{"cart_items", "carts", "order_items", "orders"} {
 		var tableExists bool
 		if err := pool.QueryRow(ctx, "SELECT to_regclass($1) IS NOT NULL", table).Scan(&tableExists); err != nil {
 			return fmt.Errorf("check %s table: %w", table, err)

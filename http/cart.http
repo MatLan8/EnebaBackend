@@ -5,7 +5,7 @@
 # (the http-client.cookies file in .idea/httpRequests) or run "Empty cart".
 # offerId is PixelVault's Elden Ring offer (6 keys). Offer ids change after seed -reset;
 # take a new one from the offers of GET /api/v1/products/{slug}.
-@offerId = 3556d88b-f858-49c6-b85d-0785f4a6ad4b
+@offerId = f26f9e4f-2b98-405d-9b59-c9044d33566c
 
 ### Get cart
 # Without a cart this returns {"items": [], "itemCount": 0, "totalCents": 0, "currency": "EUR"} and creates nothing.

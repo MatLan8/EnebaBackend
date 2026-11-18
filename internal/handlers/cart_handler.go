@@ -51,7 +51,7 @@ func (h *CartHandler) Get(w http.ResponseWriter, r *http.Request) {
 // one key, so clicking "Add to cart" twice gives 2. To set any other amount use
 // UpdateItem. If the browser has no cart yet, one is created and its ID is set
 // in the cart_token cookie. An unknown or inactive offer is a 404, an 11th key
-// is a 400, and more keys than are unsold is a 409 insufficient_stock.
+// is a 400, and more keys than are available is a 409 insufficient_stock.
 func (h *CartHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -132,7 +132,7 @@ func (h *CartHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 
 // UpdateItem handles PATCH /api/v1/cart/items/{offerId} and sets the item's
 // quantity to the value in the body. No cart, or an offer that isn't in the
-// cart, is a 404, and more than the unsold keys is a 409 insufficient_stock.
+// cart, is a 404, and more than the available keys is a 409 insufficient_stock.
 func (h *CartHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -293,10 +293,10 @@ func lockExistingCart(ctx context.Context, carts *repository.CartRepository, car
 }
 
 // ensureInStock returns a 409 insufficient_stock error if the offer has fewer
-// unsold keys than quantity. Checkout checks the stock again, since keys can
-// sell out while they sit in the cart.
+// available keys (not sold, not reserved) than quantity. Checkout checks the
+// stock again, since keys can sell out while they sit in the cart.
 func ensureInStock(ctx context.Context, carts *repository.CartRepository, offerID uuid.UUID, quantity int) error {
-	available, err := carts.CountUnsoldKeys(ctx, offerID)
+	available, err := carts.CountAvailableKeys(ctx, offerID)
 	if err != nil {
 		return err
 	}

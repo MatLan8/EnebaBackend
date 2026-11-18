@@ -21,7 +21,7 @@ type CartResponse struct {
 type CartItemResponse struct {
 	OfferID           uuid.UUID           `json:"offerId"`
 	Quantity          int                 `json:"quantity"`
-	AvailableQuantity int                 `json:"availableQuantity"` // unsold keys, caps the "+" button
+	AvailableQuantity int                 `json:"availableQuantity"` // keys not sold or reserved, caps the "+" button
 	PriceCents        int                 `json:"priceCents"`        // one key, the offer's current price
 	Product           CartProductResponse `json:"product"`
 	Seller            CartSellerResponse  `json:"seller"`
