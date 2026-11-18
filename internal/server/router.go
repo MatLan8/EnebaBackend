@@ -57,10 +57,11 @@ func NewRouter(d Deps) http.Handler {
 		})
 
 		// Public store routes. chi matches fixed segments like /filters before
-		// URL parameters, so a later /products/{slug} route won't swallow them.
+		// URL parameters, so /{slug} never swallows them.
 		r.Route("/products", func(r chi.Router) {
 			r.Get("/", d.Products.List)
 			r.Get("/filters", d.Products.Filters)
+			r.Get("/{slug}", d.Products.Get)
 		})
 
 		// Every route in this group requires a valid access token.

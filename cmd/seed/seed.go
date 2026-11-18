@@ -123,10 +123,10 @@ func seedSellers(ctx context.Context, tx pgx.Tx, sellers []seedSeller) (map[int]
 		id := uuid.New()
 		ids[s.ID] = id
 		rating := s.Rating * 2 // the dump rates sellers 0 to 5, our column is 0 to 10
-		rows = append(rows, []any{id, s.Name, s.LogoURL, rating, s.ReviewsCount})
+		rows = append(rows, []any{id, s.Name, s.LogoURL, rating})
 	}
 
-	err := insertRows(ctx, tx, "sellers", []string{"id", "name", "logo_url", "rating", "reviews_count"}, rows)
+	err := insertRows(ctx, tx, "sellers", []string{"id", "name", "logo_url", "rating"}, rows)
 	return ids, err
 }
 

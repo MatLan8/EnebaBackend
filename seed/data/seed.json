@@ -81,225 +81,193 @@
       "id": 1,
       "name": "PixelVault",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=pixelvault&size=256",
-      "rating": 4.97,
-      "reviewsCount": 182340
+      "rating": 4.97
     },
     {
       "id": 2,
       "name": "KeyForge Market",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=keyforge-market&size=256",
-      "rating": 4.91,
-      "reviewsCount": 96512
+      "rating": 4.91
     },
     {
       "id": 3,
       "name": "LootLane",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=lootlane&size=256",
-      "rating": 4.88,
-      "reviewsCount": 54120
+      "rating": 4.88
     },
     {
       "id": 4,
       "name": "NorthStar Keys",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=northstar-keys&size=256",
-      "rating": 4.95,
-      "reviewsCount": 128904
+      "rating": 4.95
     },
     {
       "id": 5,
       "name": "ByteBazaar",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=bytebazaar&size=256",
-      "rating": 4.82,
-      "reviewsCount": 33870
+      "rating": 4.82
     },
     {
       "id": 6,
       "name": "RespawnDeals",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=respawndeals&size=256",
-      "rating": 4.76,
-      "reviewsCount": 21455
+      "rating": 4.76
     },
     {
       "id": 7,
       "name": "CodeCrate",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=codecrate&size=256",
-      "rating": 4.93,
-      "reviewsCount": 74210
+      "rating": 4.93
     },
     {
       "id": 8,
       "name": "GameNest",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=gamenest&size=256",
-      "rating": 4.69,
-      "reviewsCount": 12890
+      "rating": 4.69
     },
     {
       "id": 9,
       "name": "LevelUp Supply",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=levelup-supply&size=256",
-      "rating": 4.85,
-      "reviewsCount": 40233
+      "rating": 4.85
     },
     {
       "id": 10,
       "name": "NeonKey",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=neonkey&size=256",
-      "rating": 4.58,
-      "reviewsCount": 8740
+      "rating": 4.58
     },
     {
       "id": 11,
       "name": "QuestTrader",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=questtrader&size=256",
-      "rating": 4.9,
-      "reviewsCount": 61377
+      "rating": 4.9
     },
     {
       "id": 12,
       "name": "SilverArrow Games",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=silverarrow-games&size=256",
-      "rating": 4.79,
-      "reviewsCount": 19022
+      "rating": 4.79
     },
     {
       "id": 13,
       "name": "Polar Pixel",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=polar-pixel&size=256",
-      "rating": 4.99,
-      "reviewsCount": 245610
+      "rating": 4.99
     },
     {
       "id": 14,
       "name": "ArcadeHarbor",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=arcadeharbor&size=256",
-      "rating": 4.72,
-      "reviewsCount": 15367
+      "rating": 4.72
     },
     {
       "id": 15,
       "name": "DigitalDragon",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=digitaldragon&size=256",
-      "rating": 4.87,
-      "reviewsCount": 47811
+      "rating": 4.87
     },
     {
       "id": 16,
       "name": "CrimsonCode",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=crimsoncode&size=256",
-      "rating": 4.44,
-      "reviewsCount": 3921
+      "rating": 4.44
     },
     {
       "id": 17,
       "name": "KeyHaven",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=keyhaven&size=256",
-      "rating": 4.94,
-      "reviewsCount": 88054
+      "rating": 4.94
     },
     {
       "id": 18,
       "name": "Baltic PlayHub",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=baltic-playhub&size=256",
-      "rating": 4.81,
-      "reviewsCount": 26480
+      "rating": 4.81
     },
     {
       "id": 19,
       "name": "VortexKeys",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=vortexkeys&size=256",
-      "rating": 4.63,
-      "reviewsCount": 9876
+      "rating": 4.63
     },
     {
       "id": 20,
       "name": "Starlit Store",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=starlit-store&size=256",
-      "rating": 4.89,
-      "reviewsCount": 52307
+      "rating": 4.89
     },
     {
       "id": 21,
       "name": "Redeemly",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=redeemly&size=256",
-      "rating": 4.96,
-      "reviewsCount": 150222
+      "rating": 4.96
     },
     {
       "id": 22,
       "name": "MetaLoot",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=metaloot&size=256",
-      "rating": 4.52,
-      "reviewsCount": 5410
+      "rating": 4.52
     },
     {
       "id": 23,
       "name": "HyperKey",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=hyperkey&size=256",
-      "rating": 4.84,
-      "reviewsCount": 37760
+      "rating": 4.84
     },
     {
       "id": 24,
       "name": "Golden Griffin",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=golden-griffin&size=256",
-      "rating": 4.92,
-      "reviewsCount": 69033
+      "rating": 4.92
     },
     {
       "id": 25,
       "name": "WolfPack Games",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=wolfpack-games&size=256",
-      "rating": 4.67,
-      "reviewsCount": 11208
+      "rating": 4.67
     },
     {
       "id": 26,
       "name": "Nimbus Digital",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=nimbus-digital&size=256",
-      "rating": 4.86,
-      "reviewsCount": 43519
+      "rating": 4.86
     },
     {
       "id": 27,
       "name": "TurboTokens",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=turbotokens&size=256",
-      "rating": 4.38,
-      "reviewsCount": 2187
+      "rating": 4.38
     },
     {
       "id": 28,
       "name": "AmberPlay",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=amberplay&size=256",
-      "rating": 4.78,
-      "reviewsCount": 17654
+      "rating": 4.78
     },
     {
       "id": 29,
       "name": "Frostbyte Keys",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=frostbyte-keys&size=256",
-      "rating": 4.9,
-      "reviewsCount": 58840
+      "rating": 4.9
     },
     {
       "id": 30,
       "name": "Checkpoint Co.",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=checkpoint-co&size=256",
-      "rating": 4.73,
-      "reviewsCount": 14092
+      "rating": 4.73
     },
     {
       "id": 31,
       "name": "CoinCastle",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=coincastle&size=256",
-      "rating": 4.21,
-      "reviewsCount": 1265
+      "rating": 4.21
     },
     {
       "id": 32,
       "name": "Midnight Market",
       "logoUrl": "https://api.dicebear.com/9.x/shapes/png?seed=midnight-market&size=256",
-      "rating": 4.83,
-      "reviewsCount": 30914
+      "rating": 4.83
     }
   ],
   "products": [

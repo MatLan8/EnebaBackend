@@ -11,16 +11,15 @@ func TestNewPriceResponse(t *testing.T) {
 		name         string
 		priceCents   int
 		baseCents    int
-		wantOriginal *int
 		wantDiscount *int
 	}{
-		{"rounds down", 3299, 5999, intPtr(5999), intPtr(45)}, // 45.01%
-		{"rounds up", 1000, 1999, intPtr(1999), intPtr(50)},   // 49.97%
-		{"half", 50, 100, intPtr(100), intPtr(50)},
-		{"tiny discount", 999, 1000, intPtr(1000), intPtr(0)}, // 0.1%
-		{"almost free", 1, 10000, intPtr(10000), intPtr(100)}, // 99.99%
-		{"same as base price", 1999, 1999, nil, nil},
-		{"above base price", 2499, 1999, nil, nil},
+		{"rounds down", 3299, 5999, intPtr(45)}, // 45.01%
+		{"rounds up", 1000, 1999, intPtr(50)},   // 49.97%
+		{"half", 50, 100, intPtr(50)},
+		{"tiny discount", 999, 1000, intPtr(0)}, // 0.1%
+		{"almost free", 1, 10000, intPtr(100)},  // 99.99%
+		{"same as base price", 1999, 1999, nil},
+		{"above base price", 2499, 1999, nil},
 	}
 
 	for _, tt := range tests {
@@ -30,7 +29,6 @@ func TestNewPriceResponse(t *testing.T) {
 			if got.Cents != tt.priceCents || got.Currency != "EUR" {
 				t.Errorf("cents, currency = %d, %q; want %d, %q", got.Cents, got.Currency, tt.priceCents, "EUR")
 			}
-			checkOptionalInt(t, "originalCents", got.OriginalCents, tt.wantOriginal)
 			checkOptionalInt(t, "discountPercent", got.DiscountPercent, tt.wantDiscount)
 		})
 	}

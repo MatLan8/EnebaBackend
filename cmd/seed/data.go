@@ -24,11 +24,10 @@ type seedGenre struct {
 }
 
 type seedSeller struct {
-	ID           int     `json:"id"`
-	Name         string  `json:"name"`
-	LogoURL      *string `json:"logoUrl"`
-	Rating       float64 `json:"rating"` // 0 to 5 in the dump, doubled to our 0 to 10 scale
-	ReviewsCount int     `json:"reviewsCount"`
+	ID      int     `json:"id"`
+	Name    string  `json:"name"`
+	LogoURL *string `json:"logoUrl"`
+	Rating  float64 `json:"rating"` // 0 to 5 in the dump, doubled to our 0 to 10 scale
 }
 
 type seedProduct struct {

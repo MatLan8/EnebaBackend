@@ -2,8 +2,10 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/google/uuid"
@@ -183,14 +185,15 @@ type productListRow struct {
 // discounted against the product's base price.
 func (row productListRow) toResponse() responses.ProductListItemResponse {
 	return responses.ProductListItemResponse{
-		ID:       row.ID,
-		Slug:     row.Slug,
-		Title:    row.Title,
-		ImageURL: row.ImageURL,
-		Type:     row.Type,
-		Platform: row.Platform,
-		Region:   row.Region,
-		Price:    responses.NewPriceResponse(row.PriceCents, row.BasePriceCents, row.Currency),
+		ID:             row.ID,
+		Slug:           row.Slug,
+		Title:          row.Title,
+		ImageURL:       row.ImageURL,
+		Type:           row.Type,
+		Platform:       row.Platform,
+		Region:         row.Region,
+		BasePriceCents: row.BasePriceCents,
+		Price:          responses.NewPriceResponse(row.PriceCents, row.BasePriceCents, row.Currency),
 	}
 }
 
@@ -322,4 +325,182 @@ var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 func escapeLike(s string) string {
 	return likeEscaper.Replace(s)
+}
+
+// GetBySlug returns the product page for slug: the product, its genres and every
+// offer that can be bought right now, cheapest first. It runs three small queries
+// instead of one big join, so each part stays easy to read.
+// It returns models.ErrNotFound if no product has this slug.
+func (r *ProductRepository) GetBySlug(ctx context.Context, slug string) (responses.ProductDetailResponse, error) {
+	product, err := r.getDetailRow(ctx, slug)
+	if err != nil {
+		return responses.ProductDetailResponse{}, err
+	}
+
+	genres, err := r.listGenres(ctx, product.ID)
+	if err != nil {
+		return responses.ProductDetailResponse{}, fmt.Errorf("list product genres: %w", err)
+	}
+
+	offers, err := r.listBuyableOffers(ctx, product.ID)
+	if err != nil {
+		return responses.ProductDetailResponse{}, fmt.Errorf("list product offers: %w", err)
+	}
+
+	return product.toResponse(genres, offers), nil
+}
+
+// productDetailRow is the product part of the product page, in the same order
+// as the columns selected by getDetailRow.
+type productDetailRow struct {
+	ID             uuid.UUID
+	Slug           string
+	Title          string
+	Description    string
+	ImageURL       string
+	Type           models.ProductType
+	Platform       models.Platform
+	Region         models.Region
+	Developer      *string
+	Publisher      *string
+	ReleaseDate    time.Time // a DATE column, so the time is always midnight
+	BasePriceCents int
+}
+
+// getDetailRow selects the product with this slug, or returns models.ErrNotFound.
+func (r *ProductRepository) getDetailRow(ctx context.Context, slug string) (productDetailRow, error) {
+	query, args, err := psql.
+		Select(
+			"p.id", "p.slug", "p.title", "p.description", "p.image_url", "p.type", "p.platform", "p.region",
+			"p.developer", "p.publisher", "p.release_date", "p.base_price_cents",
+		).
+		From("products p").
+		Where(sq.Eq{"p.slug": slug}).
+		ToSql()
+	if err != nil {
+		return productDetailRow{}, fmt.Errorf("build select product: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return productDetailRow{}, fmt.Errorf("select product: %w", err)
+	}
+
+	// CollectExactlyOneRow returns pgx.ErrNoRows when nothing matched.
+	product, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByPos[productDetailRow])
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return productDetailRow{}, models.ErrNotFound
+		}
+		return productDetailRow{}, fmt.Errorf("select product: %w", err)
+	}
+
+	return product, nil
+}
+
+// listGenres returns the product's genres sorted by name. The columns are
+// selected in GenreResponse's field order: slug -> Slug, name -> Name.
+func (r *ProductRepository) listGenres(ctx context.Context, productID uuid.UUID) ([]responses.GenreResponse, error) {
+	query, args, err := psql.
+		Select("g.slug", "g.name").
+		From("genres g").
+		Join("product_genres pg ON pg.genre_id = g.id").
+		Where(sq.Eq{"pg.product_id": productID}).
+		OrderBy("g.name").
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build query: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	// CollectRows starts from an empty slice, so no genres is [] in the JSON, not null.
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[responses.GenreResponse])
+}
+
+// hasUnsoldKey limits a query on "offers o" to offers that still have at least
+// one digital key left to sell. An offer without keys can't be bought.
+var hasUnsoldKey = sq.Expr("EXISTS (SELECT 1 FROM digital_keys k WHERE k.offer_id = o.id AND k.order_item_id IS NULL)")
+
+// offerRow is one row of the listBuyableOffers query: an offer with its seller,
+// in the same order as the selected columns.
+type offerRow struct {
+	ID            uuid.UUID
+	PriceCents    int
+	Currency      string
+	SellerID      uuid.UUID
+	SellerName    string
+	SellerLogoURL *string
+	SellerRating  float64 // NUMERIC(4,2) in the database
+}
+
+// listBuyableOffers returns the product's active offers that still have unsold
+// keys, cheapest first. Equal prices go to the better rated seller first, and
+// o.id makes the order the same on every request.
+func (r *ProductRepository) listBuyableOffers(ctx context.Context, productID uuid.UUID) ([]offerRow, error) {
+	query, args, err := psql.
+		Select(
+			"o.id", "o.price_cents", "o.currency",
+			"s.id", "s.name", "s.logo_url", "s.rating",
+		).
+		From("offers o").
+		Join("sellers s ON s.id = o.seller_id").
+		Where(sq.Eq{"o.product_id": productID, "o.is_active": true}).
+		Where(hasUnsoldKey).
+		OrderBy("o.price_cents ASC", "s.rating DESC", "o.id").
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build query: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[offerRow])
+}
+
+// toResponse builds the product page from the product row, its genres and its
+// offers. Each offer's discount is measured against the product's base price.
+func (row productDetailRow) toResponse(genres []responses.GenreResponse, offers []offerRow) responses.ProductDetailResponse {
+	// make(..., 0, n) so a product with nothing to sell has [] offers, not null.
+	offerResponses := make([]responses.OfferResponse, 0, len(offers))
+	for _, offer := range offers {
+		offerResponses = append(offerResponses, offer.toResponse(row.BasePriceCents))
+	}
+
+	return responses.ProductDetailResponse{
+		ID:             row.ID,
+		Slug:           row.Slug,
+		Title:          row.Title,
+		Description:    row.Description,
+		ImageURL:       row.ImageURL,
+		Type:           row.Type,
+		Platform:       row.Platform,
+		Region:         row.Region,
+		Developer:      row.Developer,
+		Publisher:      row.Publisher,
+		ReleaseDate:    row.ReleaseDate.Format(time.DateOnly), // "2022-02-25"
+		BasePriceCents: row.BasePriceCents,
+		Genres:         genres,
+		Offers:         offerResponses,
+	}
+}
+
+// toResponse turns the flat offer row into an offer with a nested price and seller.
+func (row offerRow) toResponse(basePriceCents int) responses.OfferResponse {
+	return responses.OfferResponse{
+		ID:    row.ID,
+		Price: responses.NewPriceResponse(row.PriceCents, basePriceCents, row.Currency),
+		Seller: responses.SellerResponse{
+			ID:      row.SellerID,
+			Name:    row.SellerName,
+			LogoURL: row.SellerLogoURL,
+			Rating:  row.SellerRating,
+		},
+	}
 }

@@ -8,27 +8,26 @@ import (
 )
 
 // PriceResponse is the price of an offer, e.g. the "From" price on a product
-// card, which comes from the product's cheapest active offer. OriginalCents is
-// the product's official base price, shown crossed out, and DiscountPercent is
-// how much cheaper the offer is than that. Both are null when the offer isn't
-// cheaper than the base price.
+// card, which comes from the product's cheapest active offer. DiscountPercent is
+// how much cheaper the offer is than the product's official base price, which is
+// sent once next to it as basePriceCents. It is null when the offer isn't cheaper.
 type PriceResponse struct {
 	Cents           int    `json:"cents"`
-	OriginalCents   *int   `json:"originalCents"`
 	DiscountPercent *int   `json:"discountPercent"`
 	Currency        string `json:"currency"`
 }
 
 // ProductListItemResponse is one product card in the store grid.
 type ProductListItemResponse struct {
-	ID       uuid.UUID          `json:"id"`
-	Slug     string             `json:"slug"`
-	Title    string             `json:"title"`
-	ImageURL string             `json:"imageUrl"`
-	Type     models.ProductType `json:"type"`
-	Platform models.Platform    `json:"platform"`
-	Region   models.Region      `json:"region"`
-	Price    PriceResponse      `json:"price"`
+	ID             uuid.UUID          `json:"id"`
+	Slug           string             `json:"slug"`
+	Title          string             `json:"title"`
+	ImageURL       string             `json:"imageUrl"`
+	Type           models.ProductType `json:"type"`
+	Platform       models.Platform    `json:"platform"`
+	Region         models.Region      `json:"region"`
+	BasePriceCents int                `json:"basePriceCents"` // official price, shown crossed out
+	Price          PriceResponse      `json:"price"`
 }
 
 // ProductListResponse is returned by GET /api/v1/products.
@@ -42,9 +41,9 @@ type ProductListResponse struct {
 
 // NewPriceResponse builds the price of an offer and compares it with the
 // product's official base price, e.g. an offer of 1650 for a product with a
-// base price of 2999 -> originalCents 2999, discountPercent 45.
-// Sellers can also ask more than the base price; then there is no discount to
-// show, so originalCents and discountPercent stay null.
+// base price of 2999 -> discountPercent 45.
+// An offer at (or above) the base price has no discount to show, so
+// discountPercent stays null.
 func NewPriceResponse(priceCents, basePriceCents int, currency string) PriceResponse {
 	price := PriceResponse{
 		Cents:    priceCents,
@@ -53,7 +52,6 @@ func NewPriceResponse(priceCents, basePriceCents int, currency string) PriceResp
 
 	if basePriceCents > priceCents {
 		percent := discountPercent(priceCents, basePriceCents)
-		price.OriginalCents = &basePriceCents
 		price.DiscountPercent = &percent
 	}
 

@@ -6,3 +6,7 @@ GET {{baseUrl}}/api/v1/products/filters
 # Public. All query parameters are optional; type, platform, region and genre can be repeated.
 # sort: popular (default, also with q), price_asc, price_desc, newest, oldest, name_asc, name_desc. Prices are in cents.
 GET {{baseUrl}}/api/v1/products?platform=steam&maxPrice=6000&page=1&limit=24
+
+### Get product
+# Public. Returns 404 for an unknown slug. Offers are only the buyable ones, cheapest first.
+GET {{baseUrl}}/api/v1/products/elden-ring-pc-steam-key-global
