@@ -41,6 +41,13 @@ func run() error {
 
 	slog.SetDefault(newLogger(cfg))
 
+	if err := cfg.ValidateStripe(); err != nil {
+		return err
+	}
+	if cfg.StripeWebhookSecret == "" {
+		slog.Warn("STRIPE_WEBHOOK_SECRET is not set, every Stripe webhook will be rejected and orders won't be marked paid")
+	}
+
 	// ctx is cancelled when the process gets Ctrl+C or SIGTERM (Render sends SIGTERM on redeploy).
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -61,17 +68,21 @@ func run() error {
 	refreshTokenRepo := repository.NewRefreshTokenRepository(pool)
 	productRepo := repository.NewProductRepository(pool)
 	cartRepo := repository.NewCartRepository(pool)
+	orderRepo := repository.NewOrderRepository(pool)
 
 	tokenService := services.NewTokenService(cfg)
+	stripeService := services.NewStripeService(cfg.StripeSecretKey, cfg.StripeWebhookSecret)
 
 	router := server.NewRouter(server.Deps{
-		Config:   cfg,
-		Health:   handlers.NewHealthHandler(pool),
-		Auth:     handlers.NewAuthHandler(pool, userRepo, refreshTokenRepo, tokenService, cfg.IsProduction()),
-		Users:    handlers.NewUserHandler(userRepo),
-		Products: handlers.NewProductHandler(productRepo),
-		Cart:     handlers.NewCartHandler(pool, cartRepo, cfg.IsProduction()),
-		Tokens:   tokenService,
+		Config:        cfg,
+		Health:        handlers.NewHealthHandler(pool),
+		Auth:          handlers.NewAuthHandler(pool, userRepo, refreshTokenRepo, tokenService, cfg.IsProduction()),
+		Users:         handlers.NewUserHandler(userRepo),
+		Products:      handlers.NewProductHandler(productRepo),
+		Cart:          handlers.NewCartHandler(pool, cartRepo, cfg.IsProduction()),
+		Checkout:      handlers.NewCheckoutHandler(pool, cartRepo, orderRepo, userRepo, stripeService, cfg.FrontendURL),
+		StripeWebhook: handlers.NewStripeWebhookHandler(pool, orderRepo, cartRepo, stripeService),
+		Tokens:        tokenService,
 	})
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,

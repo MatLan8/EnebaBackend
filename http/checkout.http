@@ -1,0 +1,46 @@
+# Checkout needs a signed-in user AND the cart_token cookie. GoLand's HTTP client
+# keeps both the cookie and {{accessToken}} between requests, so run these in order.
+#
+# Paying in the browser (Stripe test mode):
+#   1. Run "Checkout" and open the checkoutUrl from the response.
+#   2. Pay with the test card 4242 4242 4242 4242, any future expiry date
+#      (e.g. 12/34), any CVC and any name.
+#   3. Stripe sends you to FRONTEND_URL/orders/{orderId}?paid=1.
+#
+# The order only becomes paid when the webhook arrives, so for local runs start
+# the Stripe CLI first (it prints a whsec_... secret; put it in .env as
+# STRIPE_WEBHOOK_SECRET and restart the API):
+#   stripe listen --forward-to localhost:8080/api/v1/webhooks/stripe
+#
+# offerId is PixelVault's Elden Ring offer. Offer ids change after seed -reset;
+# take a new one from the offers of GET /api/v1/products/{slug}.
+@offerId = f26f9e4f-2b98-405d-9b59-c9044d33566c
+
+### Login
+# Seeded users all use the password Password123!.
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "emma.johnson@example.com",
+  "password": "Password123!"
+}
+
+> {% client.global.set("accessToken", response.body.accessToken); %}
+
+### Add item to cart
+# Sets the cart_token cookie on the first add.
+POST {{baseUrl}}/api/v1/cart/items
+Content-Type: application/json
+
+{
+  "offerId": "{{offerId}}"
+}
+
+### Checkout
+# 201 {"orderId": "...", "checkoutUrl": "https://checkout.stripe.com/..."}.
+# 400 cart_empty without a cart or items, 409 offer_unavailable or insufficient_stock
+# if an offer can't be bought, 502 payment_provider_error if Stripe fails.
+# The keys stay reserved for 35 minutes; the cart is emptied only after payment.
+POST {{baseUrl}}/api/v1/checkout
+Authorization: Bearer {{accessToken}}

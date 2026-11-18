@@ -27,4 +27,5 @@ type Order struct {
 	StripeSessionID *string     `json:"-"` // nil until the Stripe Checkout session exists
 	CreatedAt       time.Time   `json:"createdAt"`
 	PaidAt          *time.Time  `json:"paidAt"`
+	CartID          *uuid.UUID  `json:"-"` // the checked-out cart, emptied once paid; its ID is the cart cookie, so it is never sent
 }

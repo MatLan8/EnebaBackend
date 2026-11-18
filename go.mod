@@ -12,6 +12,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.13.0
 	github.com/joho/godotenv v1.5.1
+	github.com/stripe/stripe-go/v87 v87.1.0
 	golang.org/x/crypto v0.59.0
 )
 
@@ -27,7 +28,6 @@ require (
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
 	github.com/leodido/go-urn v1.5.0 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
-	github.com/stripe/stripe-go/v87 v87.1.0 // indirect
 	golang.org/x/sync v0.25.0 // indirect
 	golang.org/x/sys v0.50.0 // indirect
 	golang.org/x/text v0.44.0 // indirect

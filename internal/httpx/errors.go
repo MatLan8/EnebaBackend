@@ -46,6 +46,40 @@ func InsufficientStock(available int) *APIError {
 	}
 }
 
+// InsufficientStockForOffer is InsufficientStock for one offer of a cart, used
+// at checkout, where the cart can hold several offers.
+func InsufficientStockForOffer(offerID string, available int) *APIError {
+	err := InsufficientStock(available)
+	err.Details["offerId"] = offerID
+	return err
+}
+
+// CartEmpty builds a 400 error for a checkout without a cart or without items.
+func CartEmpty() *APIError {
+	return &APIError{Status: http.StatusBadRequest, Code: "cart_empty", Message: "the cart is empty"}
+}
+
+// OfferUnavailable builds a 409 error for a cart offer that can no longer be
+// bought (it was deactivated). offerID tells the client which item to remove.
+func OfferUnavailable(offerID string) *APIError {
+	return &APIError{
+		Status:  http.StatusConflict,
+		Code:    "offer_unavailable",
+		Message: "an offer in the cart is no longer available",
+		Details: map[string]string{"offerId": offerID},
+	}
+}
+
+// PaymentProviderError builds a 502 error for when Stripe can't be reached or refuses a request.
+func PaymentProviderError() *APIError {
+	return &APIError{Status: http.StatusBadGateway, Code: "payment_provider_error", Message: "the payment provider is unavailable, please try again"}
+}
+
+// InvalidSignature builds a 400 error for a webhook request without a valid signature.
+func InvalidSignature() *APIError {
+	return &APIError{Status: http.StatusBadRequest, Code: "invalid_signature", Message: "invalid webhook signature"}
+}
+
 // errorResponse is the JSON shape of every error the API returns:
 // {"error": {"code": "not_found", "message": "resource not found"}}
 type errorResponse struct {

@@ -26,6 +26,10 @@ type Config struct {
 	RefreshTokenTTL time.Duration // lifetime of a refresh token (long)
 
 	KeyEncryptionSecret []byte // 32 bytes used to encrypt digital keys (AES-256)
+
+	StripeSecretKey     string // sk_test_... locally; checked by ValidateStripe, only the API needs it
+	StripeWebhookSecret string // whsec_..., verifies that webhook requests come from Stripe
+	FrontendURL         string // where Stripe sends the buyer back after paying, without a trailing slash
 }
 
 // Load reads the environment, applies defaults and fails fast
@@ -39,6 +43,10 @@ func Load() (*Config, error) {
 		JWTSecret:   os.Getenv("JWT_SECRET"),
 		JWTIssuer:   getEnv("JWT_ISSUER", "eneba-backend"),
 		JWTAudience: getEnv("JWT_AUDIENCE", "eneba-frontend"),
+
+		StripeSecretKey:     os.Getenv("STRIPE_SECRET_KEY"),
+		StripeWebhookSecret: os.Getenv("STRIPE_WEBHOOK_SECRET"),
+		FrontendURL:         strings.TrimRight(getEnv("FRONTEND_URL", "http://localhost:5173"), "/"),
 	}
 
 	var err error
@@ -79,6 +87,24 @@ func Load() (*Config, error) {
 // IsProduction reports whether the app runs in production mode.
 func (c *Config) IsProduction() bool {
 	return c.Env == "production"
+}
+
+// ValidateStripe checks the Stripe settings. It is separate from Load because
+// only the API takes payments; the seed command doesn't need Stripe keys.
+// Outside production only test keys (sk_test_) are accepted, so local runs can
+// never charge real cards. The webhook secret is required in production; locally
+// it may be empty (the API then rejects every webhook, see main.go).
+func (c *Config) ValidateStripe() error {
+	if c.StripeSecretKey == "" {
+		return fmt.Errorf("missing required env var: STRIPE_SECRET_KEY")
+	}
+	if !c.IsProduction() && !strings.HasPrefix(c.StripeSecretKey, "sk_test_") {
+		return fmt.Errorf("STRIPE_SECRET_KEY must be a test key (sk_test_...) outside production")
+	}
+	if c.IsProduction() && c.StripeWebhookSecret == "" {
+		return fmt.Errorf("missing required env var: STRIPE_WEBHOOK_SECRET")
+	}
+	return nil
 }
 
 func getEnv(key, fallback string) string {

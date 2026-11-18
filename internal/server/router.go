@@ -17,13 +17,15 @@ import (
 // Deps holds everything the router needs. main.go builds it;
 // new handlers are added here as the API grows.
 type Deps struct {
-	Config   *config.Config
-	Health   *handlers.HealthHandler
-	Auth     *handlers.AuthHandler
-	Users    *handlers.UserHandler
-	Products *handlers.ProductHandler
-	Cart     *handlers.CartHandler
-	Tokens   *services.TokenService // used by the auth middleware
+	Config        *config.Config
+	Health        *handlers.HealthHandler
+	Auth          *handlers.AuthHandler
+	Users         *handlers.UserHandler
+	Products      *handlers.ProductHandler
+	Cart          *handlers.CartHandler
+	Checkout      *handlers.CheckoutHandler
+	StripeWebhook *handlers.StripeWebhookHandler
+	Tokens        *services.TokenService // used by the auth middleware
 }
 
 // NewRouter registers middleware and all routes.
@@ -77,11 +79,18 @@ func NewRouter(d Deps) http.Handler {
 			r.Delete("/items/{offerId}", d.Cart.RemoveItem)
 		})
 
+		// Stripe calls this, not the frontend. It is public; every request is checked
+		// with its Stripe-Signature header instead, and the handler reads the raw body itself.
+		r.Post("/webhooks/stripe", d.StripeWebhook.Handle)
+
 		// Every route in this group requires a valid access token.
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.Authenticate(d.Tokens))
 
 			r.Get("/users/me", d.Users.Me)
+
+			// Turns the cart from the cart_token cookie into an order and a Stripe payment page.
+			r.Post("/checkout", d.Checkout.Create)
 		})
 	})
 
