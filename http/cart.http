@@ -1,0 +1,39 @@
+# The cart belongs to the browser, not to a user, so no sign-in is needed.
+# The first "Add item" creates a cart and the API sets an HttpOnly cart_token cookie.
+# GoLand's HTTP client keeps that cookie and sends it with every later request,
+# so they all use the same cart. To start over with a new cart, clear the cookies
+# (the http-client.cookies file in .idea/httpRequests) or run "Empty cart".
+# offerId is PixelVault's Elden Ring offer (6 keys). Offer ids change after seed -reset;
+# take a new one from the offers of GET /api/v1/products/{slug}.
+@offerId = 3556d88b-f858-49c6-b85d-0785f4a6ad4b
+
+### Get cart
+# Without a cart this returns {"items": [], "itemCount": 0, "totalCents": 0, "currency": "EUR"} and creates nothing.
+GET {{baseUrl}}/api/v1/cart
+
+### Add item
+# Adds one key per call (quantity 1, or +1 if the offer is already in the cart). 404 for an
+# unknown or inactive offer, 400 for an 11th key, 409 insufficient_stock if there aren't enough unsold keys.
+POST {{baseUrl}}/api/v1/cart/items
+Content-Type: application/json
+
+{
+  "offerId": "{{offerId}}"
+}
+
+### Set item quantity
+# Sets the quantity (1 to 10), it doesn't add to it. To remove the item use Remove item.
+# 404 if there is no cart yet or the offer isn't in it.
+PATCH {{baseUrl}}/api/v1/cart/items/{{offerId}}
+Content-Type: application/json
+
+{
+  "quantity": 2
+}
+
+### Remove item
+DELETE {{baseUrl}}/api/v1/cart/items/{{offerId}}
+
+### Empty cart
+# Removes every item and returns 204 with no body. The cart and its cookie are kept.
+DELETE {{baseUrl}}/api/v1/cart

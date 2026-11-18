@@ -60,6 +60,7 @@ func run() error {
 	userRepo := repository.NewUserRepository(pool)
 	refreshTokenRepo := repository.NewRefreshTokenRepository(pool)
 	productRepo := repository.NewProductRepository(pool)
+	cartRepo := repository.NewCartRepository(pool)
 
 	tokenService := services.NewTokenService(cfg)
 
@@ -69,6 +70,7 @@ func run() error {
 		Auth:     handlers.NewAuthHandler(pool, userRepo, refreshTokenRepo, tokenService, cfg.IsProduction()),
 		Users:    handlers.NewUserHandler(userRepo),
 		Products: handlers.NewProductHandler(productRepo),
+		Cart:     handlers.NewCartHandler(pool, cartRepo, cfg.IsProduction()),
 		Tokens:   tokenService,
 	})
 	srv := &http.Server{

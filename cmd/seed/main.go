@@ -6,7 +6,7 @@
 //	go run ./cmd/seed          # only works while the products table is empty
 //	go run ./cmd/seed -reset   # wipes the catalog tables first, then migrates and seeds again
 //
-// -reset does not delete users or refresh tokens. Re-running the seed skips
+// -reset does not delete users or refresh tokens; it does empty all carts. Re-running the seed skips
 // emails that already exist, including real accounts.
 package main
 

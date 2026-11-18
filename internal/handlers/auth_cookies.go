@@ -39,11 +39,16 @@ func (h *AuthHandler) clearRefreshCookie(w http.ResponseWriter) {
 	})
 }
 
-// sameSite: in production the frontend and API are on different domains,
-// so the cookie must be SameSite=None (which browsers only accept with Secure).
-// Locally both run on localhost, where Lax works without HTTPS.
 func (h *AuthHandler) sameSite() http.SameSite {
-	if h.secureCookies {
+	return cookieSameSite(h.secureCookies)
+}
+
+// cookieSameSite is shared by the refresh token and cart cookies. In production
+// the frontend and API are on different domains, so a cookie must be
+// SameSite=None (which browsers only accept with Secure). Locally both run on
+// localhost, where Lax works without HTTPS.
+func cookieSameSite(secure bool) http.SameSite {
+	if secure {
 		return http.SameSiteNoneMode
 	}
 	return http.SameSiteLaxMode

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"strings"
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
@@ -52,12 +53,13 @@ func ensureCatalogEmpty(ctx context.Context, tx pgx.Tx) error {
 // is allowed even though they reference each other with foreign keys.
 // Users and refresh tokens are left alone, so -reset can rebuild the catalog
 // without deleting accounts.
-// cart_items is emptied too when the table exists, because those rows
-// reference offers and would otherwise block TRUNCATE.
+// cart_items and carts are emptied too when they exist, because cart items
+// reference offers and would otherwise block TRUNCATE. Carts without items are
+// useless, so they go as well; their cookies then simply point to no cart.
 // It runs before the migrations, so on a fresh database the tables don't exist
 // yet and there is nothing to empty. The catalog tables come from migration
-// 000003, so checking for products is enough. cart_items comes from a later
-// migration and is checked separately.
+// 000003, so checking for products is enough. cart_items and carts come from
+// later migrations and are checked separately.
 func truncateCatalog(ctx context.Context, pool *pgxpool.Pool) error {
 	var exists bool
 	if err := pool.QueryRow(ctx, "SELECT to_regclass('products') IS NOT NULL").Scan(&exists); err != nil {
@@ -67,15 +69,18 @@ func truncateCatalog(ctx context.Context, pool *pgxpool.Pool) error {
 		return nil
 	}
 
-	var cartItemsExists bool
-	if err := pool.QueryRow(ctx, "SELECT to_regclass('cart_items') IS NOT NULL").Scan(&cartItemsExists); err != nil {
-		return fmt.Errorf("check cart_items table: %w", err)
+	tables := []string{"digital_keys", "offers", "sellers", "product_genres", "genres", "products"}
+	for _, table := range []string{"cart_items", "carts"} {
+		var tableExists bool
+		if err := pool.QueryRow(ctx, "SELECT to_regclass($1) IS NOT NULL", table).Scan(&tableExists); err != nil {
+			return fmt.Errorf("check %s table: %w", table, err)
+		}
+		if tableExists {
+			tables = append(tables, table)
+		}
 	}
 
-	query := "TRUNCATE digital_keys, offers, sellers, product_genres, genres, products"
-	if cartItemsExists {
-		query = "TRUNCATE cart_items, digital_keys, offers, sellers, product_genres, genres, products"
-	}
+	query := "TRUNCATE " + strings.Join(tables, ", ")
 
 	_, err := pool.Exec(ctx, query)
 	if err != nil {

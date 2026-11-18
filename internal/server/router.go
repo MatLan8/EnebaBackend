@@ -22,6 +22,7 @@ type Deps struct {
 	Auth     *handlers.AuthHandler
 	Users    *handlers.UserHandler
 	Products *handlers.ProductHandler
+	Cart     *handlers.CartHandler
 	Tokens   *services.TokenService // used by the auth middleware
 }
 
@@ -63,6 +64,17 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/filters", d.Products.Filters)
 			r.Get("/suggestions", d.Products.Suggestions)
 			r.Get("/{slug}", d.Products.Get)
+		})
+
+		// The browser's cart, public like the store. It is found by the cart_token
+		// cookie, not by the signed-in user. Items are addressed by offer id, since an
+		// offer is in a cart at most once.
+		r.Route("/cart", func(r chi.Router) {
+			r.Get("/", d.Cart.Get)
+			r.Delete("/", d.Cart.Clear)
+			r.Post("/items", d.Cart.AddItem)
+			r.Patch("/items/{offerId}", d.Cart.UpdateItem)
+			r.Delete("/items/{offerId}", d.Cart.RemoveItem)
 		})
 
 		// Every route in this group requires a valid access token.

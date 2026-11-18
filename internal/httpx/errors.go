@@ -2,8 +2,10 @@ package httpx
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5/middleware"
 
@@ -31,6 +33,17 @@ func BadRequest(message string) *APIError {
 // ValidationFailed builds a 400 error listing the problem with each field.
 func ValidationFailed(details map[string]string) *APIError {
 	return &APIError{Status: http.StatusBadRequest, Code: "validation_failed", Message: "request validation failed", Details: details}
+}
+
+// InsufficientStock builds a 409 error for asking for more keys than an offer has left.
+// available is how many unsold keys there are, so the client can lower the quantity.
+func InsufficientStock(available int) *APIError {
+	return &APIError{
+		Status:  http.StatusConflict,
+		Code:    "insufficient_stock",
+		Message: fmt.Sprintf("not enough keys in stock, %d available", available),
+		Details: map[string]string{"availableQuantity": strconv.Itoa(available)},
+	}
 }
 
 // errorResponse is the JSON shape of every error the API returns:
