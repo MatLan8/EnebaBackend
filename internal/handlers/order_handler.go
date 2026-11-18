@@ -3,6 +3,8 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+
 	"eneba-backend/internal/httpx"
 	"eneba-backend/internal/middleware"
 	"eneba-backend/internal/models"
@@ -45,4 +47,31 @@ func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.WriteJSON(w, http.StatusOK, responses.NewOrderListResponse(items, total, params))
+}
+
+// Get handles GET /api/v1/orders/{id} and returns one of the signed-in user's
+// orders with its items. An order that doesn't exist and another user's order
+// both give the same 404, so the response never reveals that an ID exists.
+func (h *OrderHandler) Get(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	userID, ok := middleware.UserIDFromContext(ctx)
+	if !ok {
+		httpx.Error(w, r, models.ErrUnauthorized)
+		return
+	}
+
+	orderID, err := requests.ParseOrderIDParam(chi.URLParam(r, "id"))
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	order, err := h.orders.GetByUser(ctx, userID, orderID)
+	if err != nil {
+		httpx.Error(w, r, err) // models.ErrNotFound becomes a 404
+		return
+	}
+
+	httpx.WriteJSON(w, http.StatusOK, order)
 }

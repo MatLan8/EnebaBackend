@@ -9,6 +9,9 @@
 # Orders are newest first and include every status: pending, paid and cancelled.
 # productTitle is the title of the order's first item; it is null for cancelled
 # orders, whose items are deleted when they are cancelled.
+#
+# orderId is one of emma's orders; replace it with an id from "List orders".
+@orderId = aa0bc79b-a3aa-419e-99b7-718fa277506f
 
 ### Login
 # Seeded users all use the password Password123!.
@@ -31,4 +34,11 @@ Authorization: Bearer {{accessToken}}
 ### Search orders by public ID
 # Partial and case-insensitive. Replace the value with part of one of your order IDs.
 GET {{baseUrl}}/api/v1/orders?publicId=O-
+Authorization: Bearer {{accessToken}}
+
+### Get order by id
+# 200 with the order and one item per key (no quantity), sellerNames in order of
+# first appearance. 404 not_found for an unknown id or another user's order,
+# 400 validation_failed when the id isn't a UUID.
+GET {{baseUrl}}/api/v1/orders/{{orderId}}
 Authorization: Bearer {{accessToken}}

@@ -469,3 +469,124 @@ func orderListWhere(userID uuid.UUID, params requests.OrderListParams) sq.And {
 
 	return where
 }
+
+// orderDetailRow is the order part of GET /api/v1/orders/{id}, in the same
+// order as the columns selected by getDetailRow.
+type orderDetailRow struct {
+	ID         uuid.UUID
+	PublicID   string
+	CreatedAt  time.Time
+	PaidAt     *time.Time
+	Status     models.OrderStatus
+	TotalCents int
+	Currency   string
+}
+
+// orderDetailItemRow is one row of listDetailItems. Its fields are in the same
+// order as the selected columns, so pgx.RowToStructByPos can fill it.
+type orderDetailItemRow struct {
+	ID             uuid.UUID
+	Title          string
+	ImageURL       string
+	UnitPriceCents int
+	SellerName     string
+}
+
+// GetByUser returns the user's order with its items, or models.ErrNotFound when
+// there is no such order or it belongs to someone else.
+// It runs two simple queries, the order and then its items, instead of one big
+// join, so an order without items (a cancelled one) needs no special case.
+func (r *OrderRepository) GetByUser(ctx context.Context, userID, orderID uuid.UUID) (responses.OrderDetailResponse, error) {
+	order, err := r.getDetailRow(ctx, userID, orderID)
+	if err != nil {
+		return responses.OrderDetailResponse{}, err
+	}
+
+	itemRows, err := r.listDetailItems(ctx, order.ID)
+	if err != nil {
+		return responses.OrderDetailResponse{}, err
+	}
+
+	// make(..., 0, n) so an order without items has [] in the JSON, not null.
+	items := make([]responses.OrderDetailItemResponse, 0, len(itemRows))
+	for _, row := range itemRows {
+		items = append(items, responses.OrderDetailItemResponse{
+			ID:             row.ID,
+			Title:          row.Title,
+			ImageURL:       row.ImageURL,
+			UnitPriceCents: row.UnitPriceCents,
+			SellerName:     row.SellerName,
+		})
+	}
+
+	return responses.OrderDetailResponse{
+		ID:          order.ID,
+		PublicID:    order.PublicID,
+		CreatedAt:   order.CreatedAt,
+		PaidAt:      order.PaidAt,
+		Status:      order.Status,
+		SellerNames: responses.DistinctSellerNames(items),
+		TotalCents:  order.TotalCents,
+		Currency:    order.Currency,
+		Items:       items,
+	}, nil
+}
+
+// getDetailRow selects the order with this ID if it belongs to the user, or
+// returns models.ErrNotFound. Checking user_id in the same WHERE means another
+// user's order looks exactly like a missing one.
+func (r *OrderRepository) getDetailRow(ctx context.Context, userID, orderID uuid.UUID) (orderDetailRow, error) {
+	query, args, err := psql.
+		Select("o.id", "o.public_id", "o.created_at", "o.paid_at", "o.status", "o.total_cents", "o.currency").
+		From("orders o").
+		Where(sq.Eq{"o.id": orderID, "o.user_id": userID}).
+		ToSql()
+	if err != nil {
+		return orderDetailRow{}, fmt.Errorf("build select order: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return orderDetailRow{}, fmt.Errorf("select order: %w", err)
+	}
+
+	// CollectExactlyOneRow returns pgx.ErrNoRows when nothing matched.
+	order, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByPos[orderDetailRow])
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return orderDetailRow{}, models.ErrNotFound
+		}
+		return orderDetailRow{}, fmt.Errorf("select order: %w", err)
+	}
+
+	return order, nil
+}
+
+// listDetailItems returns the order's items with their product and seller, in
+// the same order the order list uses to pick productTitle.
+func (r *OrderRepository) listDetailItems(ctx context.Context, orderID uuid.UUID) ([]orderDetailItemRow, error) {
+	query, args, err := psql.
+		Select("oi.id", "p.title", "p.image_url", "oi.unit_price_cents", "s.name").
+		From("order_items oi").
+		Join("offers f ON f.id = oi.offer_id").
+		Join("products p ON p.id = f.product_id").
+		Join("sellers s ON s.id = f.seller_id").
+		Where(sq.Eq{"oi.order_id": orderID}).
+		OrderBy("oi.created_at", "oi.id").
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build list order items: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list order items: %w", err)
+	}
+
+	itemRows, err := pgx.CollectRows(rows, pgx.RowToStructByPos[orderDetailItemRow])
+	if err != nil {
+		return nil, fmt.Errorf("list order items: %w", err)
+	}
+
+	return itemRows, nil
+}
