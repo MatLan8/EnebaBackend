@@ -52,9 +52,12 @@ func ensureCatalogEmpty(ctx context.Context, tx pgx.Tx) error {
 // is allowed even though they reference each other with foreign keys.
 // Users and refresh tokens are left alone, so -reset can rebuild the catalog
 // without deleting accounts.
+// cart_items is emptied too when the table exists, because those rows
+// reference offers and would otherwise block TRUNCATE.
 // It runs before the migrations, so on a fresh database the tables don't exist
-// yet and there is nothing to empty. All catalog tables come from migration
-// 000003, so checking for products is enough.
+// yet and there is nothing to empty. The catalog tables come from migration
+// 000003, so checking for products is enough. cart_items comes from a later
+// migration and is checked separately.
 func truncateCatalog(ctx context.Context, pool *pgxpool.Pool) error {
 	var exists bool
 	if err := pool.QueryRow(ctx, "SELECT to_regclass('products') IS NOT NULL").Scan(&exists); err != nil {
@@ -64,7 +67,17 @@ func truncateCatalog(ctx context.Context, pool *pgxpool.Pool) error {
 		return nil
 	}
 
-	_, err := pool.Exec(ctx, "TRUNCATE digital_keys, offers, sellers, product_genres, genres, products")
+	var cartItemsExists bool
+	if err := pool.QueryRow(ctx, "SELECT to_regclass('cart_items') IS NOT NULL").Scan(&cartItemsExists); err != nil {
+		return fmt.Errorf("check cart_items table: %w", err)
+	}
+
+	query := "TRUNCATE digital_keys, offers, sellers, product_genres, genres, products"
+	if cartItemsExists {
+		query = "TRUNCATE cart_items, digital_keys, offers, sellers, product_genres, genres, products"
+	}
+
+	_, err := pool.Exec(ctx, query)
 	if err != nil {
 		return fmt.Errorf("truncate catalog: %w", err)
 	}
