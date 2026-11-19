@@ -156,8 +156,8 @@ func (h *CheckoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 		CustomerEmail: user.Email,
 		Currency:      lines[0].Currency,
 		LineItems:     checkoutLineItems(lines),
-		SuccessURL:    fmt.Sprintf("%s/orders/%s?paid=1", h.frontendURL, orderID),
-		CancelURL:     h.frontendURL + "/cart",
+		SuccessURL:    fmt.Sprintf("%s/redeem-keys#%s", h.frontendURL, orderID),
+		CancelURL:     h.frontendURL + "/checkout",
 		ExpiresAt:     time.Now().Add(checkoutSessionTTL),
 	})
 	if err != nil {

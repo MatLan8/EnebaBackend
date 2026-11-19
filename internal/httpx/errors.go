@@ -40,7 +40,7 @@ func InsufficientStock(available int) *APIError {
 	return &APIError{
 		Status:  http.StatusConflict,
 		Code:    "insufficient_stock",
-		Message: fmt.Sprintf("not enough keys in stock, %d available", available),
+		Message: fmt.Sprintf("Not enough keys in stock"),
 		Details: map[string]any{"availableQuantity": available},
 	}
 }
@@ -60,7 +60,7 @@ func OfferUnavailable(offerID string) *APIError {
 	return &APIError{
 		Status:  http.StatusConflict,
 		Code:    "offer_unavailable",
-		Message: "an offer in the cart is no longer available",
+		Message: "An offer in the cart is no longer available",
 		Details: map[string]any{"offerId": offerID},
 	}
 }
@@ -74,7 +74,7 @@ func OrderNotPaid(status string) *APIError {
 	return &APIError{
 		Status:  http.StatusConflict,
 		Code:    "order_not_paid",
-		Message: "the order is not paid, so its keys are not available",
+		Message: "The order is not paid, so its keys are not available",
 		Details: map[string]any{"status": status},
 	}
 }
@@ -85,7 +85,7 @@ func CheckoutAlreadyCompleted(orderID string) *APIError {
 	return &APIError{
 		Status:  http.StatusConflict,
 		Code:    "checkout_already_completed",
-		Message: "this cart was already paid for",
+		Message: "This cart was already paid for",
 		Details: map[string]any{"orderId": orderID},
 	}
 }
@@ -136,16 +136,16 @@ func toAPIError(err error) *APIError {
 
 	switch {
 	case errors.Is(err, models.ErrNotFound):
-		return &APIError{Status: http.StatusNotFound, Code: "not_found", Message: "resource not found"}
+		return &APIError{Status: http.StatusNotFound, Code: "not_found", Message: "Resource not found"}
 	case errors.Is(err, models.ErrEmailTaken):
-		return &APIError{Status: http.StatusConflict, Code: "email_taken", Message: "email is already registered"}
+		return &APIError{Status: http.StatusConflict, Code: "email_taken", Message: "Email is already registered"}
 	case errors.Is(err, models.ErrInvalidCredentials):
-		return &APIError{Status: http.StatusUnauthorized, Code: "invalid_credentials", Message: "invalid email or password"}
+		return &APIError{Status: http.StatusUnauthorized, Code: "invalid_credentials", Message: "Invalid email or password"}
 	case errors.Is(err, models.ErrInvalidToken):
-		return &APIError{Status: http.StatusUnauthorized, Code: "invalid_token", Message: "invalid or expired token"}
+		return &APIError{Status: http.StatusUnauthorized, Code: "invalid_token", Message: "Invalid or expired token"}
 	case errors.Is(err, models.ErrUnauthorized):
-		return &APIError{Status: http.StatusUnauthorized, Code: "unauthorized", Message: "authentication required"}
+		return &APIError{Status: http.StatusUnauthorized, Code: "unauthorized", Message: "Authentication required"}
 	default:
-		return &APIError{Status: http.StatusInternalServerError, Code: "internal_error", Message: "something went wrong"}
+		return &APIError{Status: http.StatusInternalServerError, Code: "internal_error", Message: "Something went wrong"}
 	}
 }
