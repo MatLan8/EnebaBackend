@@ -92,7 +92,12 @@ func seedCatalog(ctx context.Context, tx pgx.Tx, data *seedFile, keyCipher *serv
 	}
 	summary.Sellers = len(sellerIDs)
 
-	productIDs, productGenres, err := seedProducts(ctx, tx, data.Products, genreIDs)
+	platformIDs, err := loadPlatformIDs(ctx, tx)
+	if err != nil {
+		return summary, err
+	}
+
+	productIDs, productGenres, err := seedProducts(ctx, tx, data.Products, genreIDs, platformIDs)
 	if err != nil {
 		return summary, err
 	}
@@ -136,7 +141,36 @@ func seedSellers(ctx context.Context, tx pgx.Tx, sellers []seedSeller) (map[int]
 	return ids, err
 }
 
-func seedProducts(ctx context.Context, tx pgx.Tx, products []seedProduct, genreIDs map[int]uuid.UUID) (map[int]uuid.UUID, int, error) {
+// Platforms are reference data inserted by a migration, so they are looked up, not seeded.
+func loadPlatformIDs(ctx context.Context, tx pgx.Tx) (map[string]uuid.UUID, error) {
+	rows, err := tx.Query(ctx, "SELECT slug, id FROM platforms")
+	if err != nil {
+		return nil, fmt.Errorf("load platforms: %w", err)
+	}
+
+	type platformRow struct {
+		Slug string
+		ID   uuid.UUID
+	}
+	platforms, err := pgx.CollectRows(rows, pgx.RowToStructByPos[platformRow])
+	if err != nil {
+		return nil, fmt.Errorf("load platforms: %w", err)
+	}
+
+	ids := make(map[string]uuid.UUID, len(platforms))
+	for _, p := range platforms {
+		ids[p.Slug] = p.ID
+	}
+	return ids, nil
+}
+
+func seedProducts(
+	ctx context.Context,
+	tx pgx.Tx,
+	products []seedProduct,
+	genreIDs map[int]uuid.UUID,
+	platformIDs map[string]uuid.UUID,
+) (map[int]uuid.UUID, int, error) {
 	// The dump has no sales numbers, so sold_count is random. The fixed seed keeps the
 	// numbers (and the home page) the same after every reseed.
 	soldCounts := rand.New(rand.NewPCG(2027, 1))
@@ -153,8 +187,13 @@ func seedProducts(ctx context.Context, tx pgx.Tx, products []seedProduct, genreI
 			return nil, 0, fmt.Errorf("product %q: %w", p.Slug, err)
 		}
 
+		platformID, ok := platformIDs[p.Platform]
+		if !ok {
+			return nil, 0, fmt.Errorf("product %q: unknown platform %q", p.Slug, p.Platform)
+		}
+
 		productRows = append(productRows, []any{
-			id, p.Title, p.Slug, p.Description, p.ImageURL, p.Type, p.Platform, p.Region,
+			id, p.Title, p.Slug, p.Description, p.ImageURL, p.Type, platformID, p.Region,
 			p.Developer, p.Publisher, releaseDate, p.BasePriceCents, soldCounts.IntN(5000),
 		})
 
@@ -168,7 +207,7 @@ func seedProducts(ctx context.Context, tx pgx.Tx, products []seedProduct, genreI
 	}
 
 	productColumns := []string{
-		"id", "title", "slug", "description", "image_url", "type", "platform", "region",
+		"id", "title", "slug", "description", "image_url", "type", "platform_id", "region",
 		"developer", "publisher", "release_date", "base_price_cents", "sold_count",
 	}
 	if err := insertRows(ctx, tx, "products", productColumns, productRows); err != nil {

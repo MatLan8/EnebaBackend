@@ -10,15 +10,16 @@ import (
 
 // No code: codes are only sent by GET /api/v1/orders/{id}/keys.
 type KeyListItemResponse struct {
-	ID              uuid.UUID `json:"id"` // the digital key's ID
-	OrderID         uuid.UUID `json:"orderId"`
-	PublicID        string    `json:"publicId"`    // the order's public ID
-	PurchasedAt     time.Time `json:"purchasedAt"` // when the order was paid
-	SellerName      string    `json:"sellerName"`
-	ProductTitle    string    `json:"productTitle"`
-	ProductImageURL string    `json:"productImageUrl"`
-	PriceCents      int       `json:"priceCents"` // the price paid for this key
-	Currency        string    `json:"currency"`
+	ID              uuid.UUID        `json:"id"` // the digital key's ID
+	OrderID         uuid.UUID        `json:"orderId"`
+	PublicID        string           `json:"publicId"`    // the order's public ID
+	PurchasedAt     time.Time        `json:"purchasedAt"` // when the order was paid
+	SellerName      string           `json:"sellerName"`
+	ProductTitle    string           `json:"productTitle"`
+	ProductImageURL string           `json:"productImageUrl"`
+	Platform        PlatformResponse `json:"platform"`
+	PriceCents      int              `json:"priceCents"` // the price paid for this key
+	Currency        string           `json:"currency"`
 }
 
 type KeyListResponse struct {

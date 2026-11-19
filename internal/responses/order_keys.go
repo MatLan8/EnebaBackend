@@ -23,7 +23,7 @@ type OrderKeyProductResponse struct {
 	Title    string             `json:"title"`
 	ImageURL string             `json:"imageUrl"`
 	Type     models.ProductType `json:"type"`
-	Platform models.Platform    `json:"platform"`
+	Platform PlatformResponse   `json:"platform"`
 	Region   models.Region      `json:"region"`
 }
 

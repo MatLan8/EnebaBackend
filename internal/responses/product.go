@@ -15,17 +15,26 @@ type PriceResponse struct {
 	Currency        string `json:"currency"`
 }
 
+// Sent wherever a product is shown, except the store filters.
+type PlatformResponse struct {
+	Slug    string `json:"slug"`
+	Name    string `json:"name"`
+	IconURL string `json:"iconUrl"`
+}
+
 type ProductListItemResponse struct {
 	ID             uuid.UUID          `json:"id"`
 	Slug           string             `json:"slug"`
 	Title          string             `json:"title"`
 	ImageURL       string             `json:"imageUrl"`
 	Type           models.ProductType `json:"type"`
-	Platform       models.Platform    `json:"platform"`
+	Platform       PlatformResponse   `json:"platform"`
 	Region         models.Region      `json:"region"`
 	BasePriceCents int                `json:"basePriceCents"` // official price, shown crossed out
 	Currency       string             `json:"currency"`       // of basePriceCents; base prices are in models.DefaultCurrency
 	Price          PriceResponse      `json:"price"`
+	// The offer that price comes from, so the store can add it to the cart without opening the product.
+	CheapestOfferID uuid.UUID `json:"cheapestOfferId"`
 }
 
 type ProductListResponse struct {

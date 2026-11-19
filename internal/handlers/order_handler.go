@@ -138,7 +138,7 @@ func newOrderKeysResponse(order models.Order, keyRows []repository.OrderKeyRow, 
 				Title:    row.Title,
 				ImageURL: row.ImageURL,
 				Type:     row.Type,
-				Platform: row.Platform,
+				Platform: responses.PlatformResponse{Slug: row.PlatformSlug, Name: row.PlatformName, IconURL: row.PlatformIconURL},
 				Region:   row.Region,
 			},
 			Seller: responses.OrderKeySellerResponse{

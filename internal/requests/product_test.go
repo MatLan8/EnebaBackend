@@ -25,7 +25,7 @@ func TestParseProductListQueryValues(t *testing.T) {
 	if params.Search != "eldn ring" {
 		t.Errorf("search = %q; want trimmed %q", params.Search, "eldn ring")
 	}
-	if !slices.Equal(params.Platforms, []models.Platform{models.PlatformSteam, models.PlatformPSN}) {
+	if !slices.Equal(params.Platforms, []string{"steam", "psn"}) {
 		t.Errorf("platforms = %v", params.Platforms)
 	}
 	if !slices.Equal(params.Types, []models.ProductType{models.ProductTypeDLC}) {
@@ -55,7 +55,6 @@ func TestParseProductListQueryInvalid(t *testing.T) {
 		field string // the parameter that must be reported
 	}{
 		{"unknown type", "type=movie", "type"},
-		{"one bad platform among good ones", "platform=steam&platform=origin", "platform"},
 		{"unknown region", "region=mars", "region"},
 		{"negative min price", "minPrice=-1", "minPrice"},
 		{"max price not a number", "maxPrice=cheap", "maxPrice"},

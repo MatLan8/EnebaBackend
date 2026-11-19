@@ -7,13 +7,14 @@ type ProductSuggestionsResponse struct {
 }
 
 type ProductSuggestionResponse struct {
-	Slug           string        `json:"slug"`
-	Title          string        `json:"title"`
-	ImageURL       string        `json:"imageUrl"`
-	IsDLC          bool          `json:"isDlc"`          // shows the DLC badge
-	BasePriceCents int           `json:"basePriceCents"` // official price, shown crossed out
-	Currency       string        `json:"currency"`       // of basePriceCents; base prices are in models.DefaultCurrency
-	Price          PriceResponse `json:"price"`          // the cheapest buyable offer
+	Slug           string           `json:"slug"`
+	Title          string           `json:"title"`
+	ImageURL       string           `json:"imageUrl"`
+	Platform       PlatformResponse `json:"platform"`
+	IsDLC          bool             `json:"isDlc"`          // shows the DLC badge
+	BasePriceCents int              `json:"basePriceCents"` // official price, shown crossed out
+	Currency       string           `json:"currency"`       // of basePriceCents; base prices are in models.DefaultCurrency
+	Price          PriceResponse    `json:"price"`          // the cheapest buyable offer
 }
 
 func NewProductSuggestionsResponse(items []ProductSuggestionResponse, total int) ProductSuggestionsResponse {

@@ -37,7 +37,7 @@ type seedProduct struct {
 	Description    string  `json:"description"`
 	ImageURL       string  `json:"imageUrl"`
 	Type           string  `json:"type"`
-	Platform       string  `json:"platform"`
+	Platform       string  `json:"platform"` // a platforms.slug, see migrations/000011_platforms
 	Region         string  `json:"region"`
 	Developer      *string `json:"developer"`
 	Publisher      *string `json:"publisher"`

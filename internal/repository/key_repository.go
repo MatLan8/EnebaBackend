@@ -27,6 +27,7 @@ const boughtKeys = `order_items oi
 	JOIN orders o ON o.id = oi.order_id
 	JOIN offers f ON f.id = oi.offer_id
 	JOIN products p ON p.id = f.product_id
+	JOIN ` + joinPlatform + `
 	JOIN sellers s ON s.id = f.seller_id`
 
 // Fields follow the order of the selected columns (RowToStructByPos).
@@ -38,6 +39,9 @@ type keyListRow struct {
 	SellerName      string
 	ProductTitle    string
 	ProductImageURL string
+	PlatformSlug    string
+	PlatformName    string
+	PlatformIconURL string
 	PriceCents      int
 	Currency        string
 }
@@ -51,6 +55,7 @@ func (row keyListRow) toResponse() responses.KeyListItemResponse {
 		SellerName:      row.SellerName,
 		ProductTitle:    row.ProductTitle,
 		ProductImageURL: row.ProductImageURL,
+		Platform:        platformResponse(row.PlatformSlug, row.PlatformName, row.PlatformIconURL),
 		PriceCents:      row.PriceCents,
 		Currency:        row.Currency,
 	}
@@ -67,10 +72,9 @@ func (r *KeyRepository) List(ctx context.Context, userID uuid.UUID, params reque
 
 	// oi.id makes the order unique, so no key appears on two pages.
 	query, args, err := psql.
-		Select(
-			"oi.digital_key_id", "o.id", "o.public_id", "o.paid_at",
-			"s.name", "p.title", "p.image_url", "oi.unit_price_cents", "o.currency",
-		).
+		Select("oi.digital_key_id", "o.id", "o.public_id", "o.paid_at", "s.name", "p.title", "p.image_url").
+		Columns(platformColumns...).
+		Columns("oi.unit_price_cents", "o.currency").
 		From(boughtKeys).
 		Where(where).
 		OrderBy("o.paid_at DESC", "oi.created_at", "oi.id").

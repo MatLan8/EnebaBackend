@@ -10,12 +10,13 @@ import (
 
 // No quantity: an order has one item per key, so two keys of the same offer are two items.
 type OrderDetailItemResponse struct {
-	ID             uuid.UUID `json:"id"` // the order item's ID
-	Title          string    `json:"title"`
-	ImageURL       string    `json:"imageUrl"`
-	UnitPriceCents int       `json:"unitPriceCents"` // the price paid, fixed at checkout
-	Currency       string    `json:"currency"`       // the order's currency, repeated so each price has one
-	SellerName     string    `json:"sellerName"`
+	ID             uuid.UUID        `json:"id"` // the order item's ID
+	Title          string           `json:"title"`
+	ImageURL       string           `json:"imageUrl"`
+	Platform       PlatformResponse `json:"platform"`
+	UnitPriceCents int              `json:"unitPriceCents"` // the price paid, fixed at checkout
+	Currency       string           `json:"currency"`       // the order's currency, repeated so each price has one
+	SellerName     string           `json:"sellerName"`
 }
 
 // A cancelled order has no items (cancelling deletes them to free the keys), so items and sellerNames are [].

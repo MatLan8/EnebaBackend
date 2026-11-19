@@ -358,13 +358,14 @@ func (r *OrderRepository) Cancel(ctx context.Context, orderID uuid.UUID) error {
 	return nil
 }
 
-// LATERAL with LIMIT 1 picks each order's first item title. LEFT JOIN, so a cancelled order
-// (its items are deleted) is still listed, with a NULL title.
-const firstOrderItemTitle = `LEFT JOIN LATERAL (
-	SELECT p.title
+// LATERAL with LIMIT 1 picks each order's first item (title and platform). LEFT JOIN, so a
+// cancelled order (its items are deleted) is still listed, with NULLs.
+const firstOrderItem = `LEFT JOIN LATERAL (
+	SELECT p.title, pl.slug, pl.name, pl.icon_url
 	FROM order_items oi
 	JOIN offers f ON f.id = oi.offer_id
 	JOIN products p ON p.id = f.product_id
+	JOIN ` + joinPlatform + `
 	WHERE oi.order_id = o.id
 	ORDER BY oi.created_at, oi.id
 	LIMIT 1
@@ -374,14 +375,27 @@ const orderItemCount = "(SELECT COUNT(*) FROM order_items oi WHERE oi.order_id =
 
 // Fields follow the order of the selected columns (RowToStructByPos).
 type orderListRow struct {
-	ID           uuid.UUID
-	PublicID     string
-	CreatedAt    time.Time
-	Status       models.OrderStatus
-	ProductTitle *string // NULL for a cancelled order (no items)
-	ItemCount    int
-	TotalCents   int
-	Currency     string
+	ID              uuid.UUID
+	PublicID        string
+	CreatedAt       time.Time
+	Status          models.OrderStatus
+	ProductTitle    *string // this and the platform are NULL for a cancelled order (no items)
+	PlatformSlug    *string
+	PlatformName    *string
+	PlatformIconURL *string
+	ItemCount       int
+	TotalCents      int
+	Currency        string
+}
+
+// nil for a cancelled order, which has no items to take the platform from.
+func (row orderListRow) platform() *responses.PlatformResponse {
+	if row.PlatformSlug == nil || row.PlatformName == nil || row.PlatformIconURL == nil {
+		return nil
+	}
+
+	platform := platformResponse(*row.PlatformSlug, *row.PlatformName, *row.PlatformIconURL)
+	return &platform
 }
 
 func (row orderListRow) toResponse() responses.OrderListItemResponse {
@@ -391,6 +405,7 @@ func (row orderListRow) toResponse() responses.OrderListItemResponse {
 		CreatedAt:    row.CreatedAt,
 		Status:       row.Status,
 		ProductTitle: row.ProductTitle,
+		Platform:     row.platform(),
 		ItemCount:    row.ItemCount,
 		TotalCents:   row.TotalCents,
 		Currency:     row.Currency,
@@ -409,10 +424,10 @@ func (r *OrderRepository) ListByUser(ctx context.Context, userID uuid.UUID, para
 	query, args, err := psql.
 		Select(
 			"o.id", "o.public_id", "o.created_at", "o.status",
-			"first_item.title", orderItemCount, "o.total_cents", "o.currency",
+			"first_item.title", "first_item.slug", "first_item.name", "first_item.icon_url", orderItemCount, "o.total_cents", "o.currency",
 		).
 		From("orders o").
-		JoinClause(firstOrderItemTitle).
+		JoinClause(firstOrderItem).
 		Where(where).
 		OrderBy("o.created_at DESC", "o.id DESC").
 		Limit(uint64(params.Limit)).
@@ -486,11 +501,14 @@ type orderDetailRow struct {
 
 // Fields follow the order of the selected columns (RowToStructByPos).
 type orderDetailItemRow struct {
-	ID             uuid.UUID
-	Title          string
-	ImageURL       string
-	UnitPriceCents int
-	SellerName     string
+	ID              uuid.UUID
+	Title           string
+	ImageURL        string
+	PlatformSlug    string
+	PlatformName    string
+	PlatformIconURL string
+	UnitPriceCents  int
+	SellerName      string
 }
 
 // Two simple queries (order, then items) instead of one join, so an order without items
@@ -513,6 +531,7 @@ func (r *OrderRepository) GetByUser(ctx context.Context, userID, orderID uuid.UU
 			ID:             row.ID,
 			Title:          row.Title,
 			ImageURL:       row.ImageURL,
+			Platform:       platformResponse(row.PlatformSlug, row.PlatformName, row.PlatformIconURL),
 			UnitPriceCents: row.UnitPriceCents,
 			Currency:       order.Currency,
 			SellerName:     row.SellerName,
@@ -562,10 +581,13 @@ func (r *OrderRepository) getDetailRow(ctx context.Context, userID, orderID uuid
 // Same item order the order list uses to pick productTitle.
 func (r *OrderRepository) listDetailItems(ctx context.Context, orderID uuid.UUID) ([]orderDetailItemRow, error) {
 	query, args, err := psql.
-		Select("oi.id", "p.title", "p.image_url", "oi.unit_price_cents", "s.name").
+		Select("oi.id", "p.title", "p.image_url").
+		Columns(platformColumns...).
+		Columns("oi.unit_price_cents", "s.name").
 		From("order_items oi").
 		Join("offers f ON f.id = oi.offer_id").
 		Join("products p ON p.id = f.product_id").
+		Join(joinPlatform).
 		Join("sellers s ON s.id = f.seller_id").
 		Where(sq.Eq{"oi.order_id": orderID}).
 		OrderBy("oi.created_at", "oi.id").
@@ -617,30 +639,31 @@ func (r *OrderRepository) GetByIDForUser(ctx context.Context, userID, orderID uu
 // The code is still encrypted: the handler decrypts it, so plaintext codes never pass through
 // the repository. Fields follow the columns selected by ListKeys.
 type OrderKeyRow struct {
-	KeyID         uuid.UUID
-	CodeEncrypted []byte
-	Title         string
-	ImageURL      string
-	Type          models.ProductType
-	Platform      models.Platform
-	Region        models.Region
-	SellerName    string
-	SellerLogoURL *string
-	SellerRating  float64
+	KeyID           uuid.UUID
+	CodeEncrypted   []byte
+	Title           string
+	ImageURL        string
+	Type            models.ProductType
+	PlatformSlug    string
+	PlatformName    string
+	PlatformIconURL string
+	Region          models.Region
+	SellerName      string
+	SellerLogoURL   *string
+	SellerRating    float64
 }
 
 // Same order as the order's items.
 func (r *OrderRepository) ListKeys(ctx context.Context, orderID uuid.UUID) ([]OrderKeyRow, error) {
 	query, args, err := psql.
-		Select(
-			"k.id", "k.code_encrypted",
-			"p.title", "p.image_url", "p.type", "p.platform", "p.region",
-			"s.name", "s.logo_url", "s.rating",
-		).
+		Select("k.id", "k.code_encrypted", "p.title", "p.image_url", "p.type").
+		Columns(platformColumns...).
+		Columns("p.region", "s.name", "s.logo_url", "s.rating").
 		From("order_items oi").
 		Join("digital_keys k ON k.id = oi.digital_key_id").
 		Join("offers f ON f.id = oi.offer_id").
 		Join("products p ON p.id = f.product_id").
+		Join(joinPlatform).
 		Join("sellers s ON s.id = f.seller_id").
 		Where(sq.Eq{"oi.order_id": orderID}).
 		OrderBy("oi.created_at", "oi.id").

@@ -36,6 +36,9 @@ type cartItemRow struct {
 	Title             string
 	ImageURL          string
 	Type              models.ProductType
+	PlatformSlug      string
+	PlatformName      string
+	PlatformIconURL   string
 	SellerName        string
 	SellerLogoURL     *string
 	IsActive          bool
@@ -59,6 +62,7 @@ func (row cartItemRow) toResponse() responses.CartItemResponse {
 			Slug:     row.Slug,
 			Title:    row.Title,
 			ImageURL: row.ImageURL,
+			Platform: platformResponse(row.PlatformSlug, row.PlatformName, row.PlatformIconURL),
 			IsDLC:    row.Type == models.ProductTypeDLC,
 		},
 		Seller: responses.CartSellerResponse{
@@ -88,14 +92,13 @@ func (r *CartRepository) GetCart(ctx context.Context, cartID uuid.UUID) (respons
 	query, args, err := psql.
 		Select("ci.offer_id", "ci.quantity").
 		Column(sq.Expr(availableForCartCount, cartID)).
-		Columns(
-			"o.price_cents", "o.currency",
-			"p.slug", "p.title", "p.image_url", "p.type",
-			"s.name", "s.logo_url", "o.is_active",
-		).
+		Columns("o.price_cents", "o.currency", "p.slug", "p.title", "p.image_url", "p.type").
+		Columns(platformColumns...).
+		Columns("s.name", "s.logo_url", "o.is_active").
 		From("cart_items ci").
 		Join("offers o ON o.id = ci.offer_id").
 		Join("products p ON p.id = o.product_id").
+		Join(joinPlatform).
 		Join("sellers s ON s.id = o.seller_id").
 		Where(sq.Eq{"ci.cart_id": cartID}).
 		OrderBy("ci.created_at", "ci.offer_id").

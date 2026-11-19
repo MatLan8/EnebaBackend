@@ -34,7 +34,7 @@ func (r *ProductRepository) GetFilters(ctx context.Context) (responses.ProductFi
 		return responses.ProductFiltersResponse{}, fmt.Errorf("count products by type: %w", err)
 	}
 
-	platforms, err := r.countProductsBy(ctx, "p.platform")
+	platforms, err := r.countProductsByPlatform(ctx)
 	if err != nil {
 		return responses.ProductFiltersResponse{}, fmt.Errorf("count products by platform: %w", err)
 	}
@@ -79,8 +79,30 @@ func (r *ProductRepository) countProductsBy(ctx context.Context, column string) 
 	return pgx.CollectRows(rows, pgx.RowToStructByPos[responses.FilterOption])
 }
 
-// Columns are selected in GenreFilterOption's field order: slug -> Value, name -> Label.
-func (r *ProductRepository) countProductsByGenre(ctx context.Context) ([]responses.GenreFilterOption, error) {
+// Columns are selected in LabeledFilterOption's field order: slug -> Value, name -> Label.
+func (r *ProductRepository) countProductsByPlatform(ctx context.Context) ([]responses.LabeledFilterOption, error) {
+	query, args, err := psql.
+		Select("pl.slug", "pl.name", "COUNT(*)").
+		From("products p").
+		Join(joinPlatform).
+		Where(hasBuyableOffer).
+		GroupBy("pl.slug", "pl.name").
+		OrderBy("COUNT(*) DESC", "pl.slug").
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build query: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[responses.LabeledFilterOption])
+}
+
+// Columns are selected in LabeledFilterOption's field order: slug -> Value, name -> Label.
+func (r *ProductRepository) countProductsByGenre(ctx context.Context) ([]responses.LabeledFilterOption, error) {
 	query, args, err := psql.
 		Select("g.slug", "g.name", "COUNT(*)").
 		From("genres g").
@@ -99,14 +121,14 @@ func (r *ProductRepository) countProductsByGenre(ctx context.Context) ([]respons
 		return nil, err
 	}
 
-	return pgx.CollectRows(rows, pgx.RowToStructByPos[responses.GenreFilterOption])
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[responses.LabeledFilterOption])
 }
 
 // The cheapest buyable offer is the first offer on the product page, so every list shows the price
 // a buyer actually gets. It's an inner join, so products without a buyable offer (inactive, or all
 // keys sold or reserved) drop out. o.id breaks price ties, so the same offer is picked every time.
 const cheapestBuyableOffer = `JOIN LATERAL (
-	SELECT o.price_cents, o.currency
+	SELECT o.id, o.price_cents, o.currency
 	FROM offers o
 	WHERE o.product_id = p.id AND o.is_active AND ` + availableKeyExists + `
 	ORDER BY o.price_cents, o.id
@@ -129,30 +151,34 @@ var productSortOrders = map[requests.ProductSort]string{
 
 // Fields follow the order of the selected columns (RowToStructByPos).
 type productListRow struct {
-	ID             uuid.UUID
-	Slug           string
-	Title          string
-	ImageURL       string
-	Type           models.ProductType
-	Platform       models.Platform
-	Region         models.Region
-	PriceCents     int
-	BasePriceCents int
-	Currency       string
+	ID              uuid.UUID
+	Slug            string
+	Title           string
+	ImageURL        string
+	Type            models.ProductType
+	PlatformSlug    string
+	PlatformName    string
+	PlatformIconURL string
+	Region          models.Region
+	CheapestOfferID uuid.UUID
+	PriceCents      int
+	BasePriceCents  int
+	Currency        string
 }
 
 func (row productListRow) toResponse() responses.ProductListItemResponse {
 	return responses.ProductListItemResponse{
-		ID:             row.ID,
-		Slug:           row.Slug,
-		Title:          row.Title,
-		ImageURL:       row.ImageURL,
-		Type:           row.Type,
-		Platform:       row.Platform,
-		Region:         row.Region,
-		BasePriceCents: row.BasePriceCents,
-		Currency:       models.DefaultCurrency,
-		Price:          responses.NewPriceResponse(row.PriceCents, row.BasePriceCents, row.Currency),
+		ID:              row.ID,
+		Slug:            row.Slug,
+		Title:           row.Title,
+		ImageURL:        row.ImageURL,
+		Type:            row.Type,
+		Platform:        platformResponse(row.PlatformSlug, row.PlatformName, row.PlatformIconURL),
+		Region:          row.Region,
+		BasePriceCents:  row.BasePriceCents,
+		Currency:        models.DefaultCurrency,
+		Price:           responses.NewPriceResponse(row.PriceCents, row.BasePriceCents, row.Currency),
+		CheapestOfferID: row.CheapestOfferID,
 	}
 }
 
@@ -165,11 +191,11 @@ func (r *ProductRepository) List(ctx context.Context, params requests.ProductLis
 	}
 
 	query := psql.
-		Select(
-			"p.id", "p.slug", "p.title", "p.image_url", "p.type", "p.platform", "p.region",
-			"co.price_cents", "p.base_price_cents", "co.currency",
-		).
+		Select("p.id", "p.slug", "p.title", "p.image_url", "p.type").
+		Columns(platformColumns...).
+		Columns("p.region", "co.id", "co.price_cents", "p.base_price_cents", "co.currency").
 		From("products p").
+		Join(joinPlatform).
 		JoinClause(cheapestBuyableOffer).
 		Where(where).
 		OrderBy(productSortOrders[params.Sort]).
@@ -239,7 +265,7 @@ func productListWhere(params requests.ProductListParams) sq.And {
 		where = append(where, sq.Eq{"p.type": params.Types})
 	}
 	if len(params.Platforms) > 0 {
-		where = append(where, sq.Eq{"p.platform": params.Platforms})
+		where = append(where, sq.Expr("p.platform_id IN (SELECT id FROM platforms WHERE slug = ANY(?))", params.Platforms))
 	}
 	if len(params.Regions) > 0 {
 		where = append(where, sq.Eq{"p.region": params.Regions})
@@ -285,13 +311,16 @@ const maxSuggestions = 6
 
 // Fields follow the order of the selected columns (RowToStructByPos).
 type productSuggestionRow struct {
-	Slug           string
-	Title          string
-	ImageURL       string
-	Type           models.ProductType
-	PriceCents     int
-	BasePriceCents int
-	Currency       string
+	Slug            string
+	Title           string
+	ImageURL        string
+	Type            models.ProductType
+	PlatformSlug    string
+	PlatformName    string
+	PlatformIconURL string
+	PriceCents      int
+	BasePriceCents  int
+	Currency        string
 }
 
 func (row productSuggestionRow) toResponse() responses.ProductSuggestionResponse {
@@ -299,6 +328,7 @@ func (row productSuggestionRow) toResponse() responses.ProductSuggestionResponse
 		Slug:           row.Slug,
 		Title:          row.Title,
 		ImageURL:       row.ImageURL,
+		Platform:       platformResponse(row.PlatformSlug, row.PlatformName, row.PlatformIconURL),
 		IsDLC:          row.Type == models.ProductTypeDLC,
 		BasePriceCents: row.BasePriceCents,
 		Currency:       models.DefaultCurrency,
@@ -320,11 +350,11 @@ func (r *ProductRepository) Suggest(ctx context.Context, search string) (respons
 	}
 
 	query, args, err := psql.
-		Select(
-			"p.slug", "p.title", "p.image_url", "p.type",
-			"co.price_cents", "p.base_price_cents", "co.currency",
-		).
+		Select("p.slug", "p.title", "p.image_url", "p.type").
+		Columns(platformColumns...).
+		Columns("co.price_cents", "p.base_price_cents", "co.currency").
 		From("products p").
+		Join(joinPlatform).
 		JoinClause(cheapestBuyableOffer).
 		Where(where).
 		// Prefix matches first (true sorts after false, hence DESC), then the closest fuzzy matches,
@@ -378,27 +408,29 @@ func (r *ProductRepository) GetBySlug(ctx context.Context, slug string) (respons
 
 // Fields follow the columns selected by getDetailRow.
 type productDetailRow struct {
-	ID             uuid.UUID
-	Slug           string
-	Title          string
-	Description    string
-	ImageURL       string
-	Type           models.ProductType
-	Platform       models.Platform
-	Region         models.Region
-	Developer      *string
-	Publisher      *string
-	ReleaseDate    time.Time // a DATE column, so the time is always midnight
-	BasePriceCents int
+	ID              uuid.UUID
+	Slug            string
+	Title           string
+	Description     string
+	ImageURL        string
+	Type            models.ProductType
+	PlatformSlug    string
+	PlatformName    string
+	PlatformIconURL string
+	Region          models.Region
+	Developer       *string
+	Publisher       *string
+	ReleaseDate     time.Time // a DATE column, so the time is always midnight
+	BasePriceCents  int
 }
 
 func (r *ProductRepository) getDetailRow(ctx context.Context, slug string) (productDetailRow, error) {
 	query, args, err := psql.
-		Select(
-			"p.id", "p.slug", "p.title", "p.description", "p.image_url", "p.type", "p.platform", "p.region",
-			"p.developer", "p.publisher", "p.release_date", "p.base_price_cents",
-		).
+		Select("p.id", "p.slug", "p.title", "p.description", "p.image_url", "p.type").
+		Columns(platformColumns...).
+		Columns("p.region", "p.developer", "p.publisher", "p.release_date", "p.base_price_cents").
 		From("products p").
+		Join(joinPlatform).
 		Where(sq.Eq{"p.slug": slug}).
 		ToSql()
 	if err != nil {
@@ -493,7 +525,7 @@ func (row productDetailRow) toResponse(genres []responses.GenreResponse, offers 
 		Description:    row.Description,
 		ImageURL:       row.ImageURL,
 		Type:           row.Type,
-		Platform:       row.Platform,
+		Platform:       platformResponse(row.PlatformSlug, row.PlatformName, row.PlatformIconURL),
 		Region:         row.Region,
 		Developer:      row.Developer,
 		Publisher:      row.Publisher,
@@ -521,11 +553,11 @@ func (row offerRow) toResponse(basePriceCents int) responses.OfferResponse {
 func (r *ProductRepository) ListPopular(ctx context.Context, types []models.ProductType, limit int) ([]responses.ProductListItemResponse, error) {
 	// Equal sold counts would come back in random order; title and id make it stable.
 	query, args, err := psql.
-		Select(
-			"p.id", "p.slug", "p.title", "p.image_url", "p.type", "p.platform", "p.region",
-			"co.price_cents", "p.base_price_cents", "co.currency",
-		).
+		Select("p.id", "p.slug", "p.title", "p.image_url", "p.type").
+		Columns(platformColumns...).
+		Columns("p.region", "co.id", "co.price_cents", "p.base_price_cents", "co.currency").
 		From("products p").
+		Join(joinPlatform).
 		JoinClause(cheapestBuyableOffer).
 		Where(sq.Eq{"p.type": types}). // a slice becomes "IN (...)"
 		OrderBy("p.sold_count DESC", "p.title", "p.id").

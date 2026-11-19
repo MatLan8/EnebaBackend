@@ -44,7 +44,7 @@ var ProductSorts = []ProductSort{
 type ProductListParams struct {
 	Search        string // typo-tolerant
 	Types         []models.ProductType
-	Platforms     []models.Platform
+	Platforms     []string // slugs
 	Regions       []models.Region
 	Genres        []string
 	MinPriceCents *int // compared with the cheapest buyable offer
@@ -63,10 +63,11 @@ func ParseProductListQuery(query url.Values) (ProductListParams, error) {
 	details := map[string]string{}
 
 	params := ProductListParams{
-		Search: strings.TrimSpace(query.Get("q")),
-		Genres: query["genre"], // unknown slugs simply match nothing
-		Page:   1,
-		Limit:  defaultProductPageLimit,
+		Search:    strings.TrimSpace(query.Get("q")),
+		Platforms: query["platform"], // like genres, unknown slugs simply match nothing
+		Genres:    query["genre"],
+		Page:      1,
+		Limit:     defaultProductPageLimit,
 	}
 
 	if utf8.RuneCountInString(params.Search) > maxProductSearchLength {
@@ -76,9 +77,6 @@ func ParseProductListQuery(query url.Values) (ProductListParams, error) {
 	var ok bool
 	if params.Types, ok = parseEnumValues(query["type"], models.ProductTypes); !ok {
 		details["type"] = mustBeOneOf(models.ProductTypes)
-	}
-	if params.Platforms, ok = parseEnumValues(query["platform"], models.Platforms); !ok {
-		details["platform"] = mustBeOneOf(models.Platforms)
 	}
 	if params.Regions, ok = parseEnumValues(query["region"], models.Regions); !ok {
 		details["region"] = mustBeOneOf(models.Regions)

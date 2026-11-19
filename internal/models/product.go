@@ -14,7 +14,7 @@ type Product struct {
 	Description    string      `json:"description"`
 	ImageURL       string      `json:"imageUrl"`
 	Type           ProductType `json:"type"`
-	Platform       Platform    `json:"platform"`
+	PlatformID     uuid.UUID   `json:"platformId"`
 	Region         Region      `json:"region"`
 	Developer      *string     `json:"developer"`
 	Publisher      *string     `json:"publisher"`

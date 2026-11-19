@@ -28,10 +28,11 @@ type CartItemResponse struct {
 }
 
 type CartProductResponse struct {
-	Slug     string `json:"slug"`
-	Title    string `json:"title"`
-	ImageURL string `json:"imageUrl"`
-	IsDLC    bool   `json:"isDlc"` // shows the DLC badge
+	Slug     string           `json:"slug"`
+	Title    string           `json:"title"`
+	ImageURL string           `json:"imageUrl"`
+	Platform PlatformResponse `json:"platform"`
+	IsDLC    bool             `json:"isDlc"` // shows the DLC badge
 }
 
 type CartSellerResponse struct {

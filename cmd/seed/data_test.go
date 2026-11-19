@@ -8,6 +8,12 @@ import (
 	"eneba-backend/internal/requests"
 )
 
+// Must match the slugs inserted by migrations/000011_platforms.up.sql.
+var platformSlugs = []string{
+	"steam", "epic_games", "ea_app", "battlenet", "psn", "ubisoft", "xbox_live", "nintendo_eshop",
+	"microsoft", "roblox", "google_play", "windows", "eset", "spotify", "discord", "riot_games",
+}
+
 // Checks the real seed file, so a data typo fails here instead of halfway through a seed run.
 func TestSeedFile_MatchesSchema(t *testing.T) {
 	data, err := loadSeedFile("../../seed/data/seed.json")
@@ -35,7 +41,7 @@ func TestSeedFile_MatchesSchema(t *testing.T) {
 		if !slices.Contains(models.ProductTypes, models.ProductType(p.Type)) {
 			t.Errorf("product %q: unknown type %q", p.Slug, p.Type)
 		}
-		if !slices.Contains(models.Platforms, models.Platform(p.Platform)) {
+		if !slices.Contains(platformSlugs, p.Platform) {
 			t.Errorf("product %q: unknown platform %q", p.Slug, p.Platform)
 		}
 		if !slices.Contains(models.Regions, models.Region(p.Region)) {

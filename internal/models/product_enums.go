@@ -22,32 +22,6 @@ var ProductTypes = []ProductType{
 	ProductTypeTopUp,
 }
 
-type Platform string
-
-const (
-	PlatformSteam           Platform = "steam"
-	PlatformXboxLive        Platform = "xbox_live"
-	PlatformPSN             Platform = "psn"
-	PlatformNintendoEShop   Platform = "nintendo_eshop"
-	PlatformEAApp           Platform = "ea_app"
-	PlatformUbisoft         Platform = "ubisoft"
-	PlatformEpicGames       Platform = "epic_games"
-	PlatformBattleNet       Platform = "battlenet"
-	PlatformOfficialWebsite Platform = "official_website" // redeemed on the publisher's own site, e.g. Minecraft or Windows
-)
-
-var Platforms = []Platform{
-	PlatformSteam,
-	PlatformXboxLive,
-	PlatformPSN,
-	PlatformNintendoEShop,
-	PlatformEAApp,
-	PlatformUbisoft,
-	PlatformEpicGames,
-	PlatformBattleNet,
-	PlatformOfficialWebsite,
-}
-
 type Region string
 
 const (

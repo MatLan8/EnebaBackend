@@ -14,7 +14,7 @@ type ProductDetailResponse struct {
 	Description    string             `json:"description"`
 	ImageURL       string             `json:"imageUrl"`
 	Type           models.ProductType `json:"type"`
-	Platform       models.Platform    `json:"platform"`
+	Platform       PlatformResponse   `json:"platform"`
 	Region         models.Region      `json:"region"`
 	Developer      *string            `json:"developer"`
 	Publisher      *string            `json:"publisher"`
